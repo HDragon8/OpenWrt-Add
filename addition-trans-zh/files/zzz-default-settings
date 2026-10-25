@@ -9,8 +9,8 @@ uci set luci.main.lang=auto
 uci commit luci
 
 #自动挂载
-uci set fstab.@global[0].anon_mount=1
-uci commit fstab
+#uci set fstab.@global[0].anon_mount=1
+#uci commit fstab
 
 #时区设置
 uci set system.@system[0].zram_comp_algo='lzo-rle'
@@ -57,13 +57,13 @@ uci commit uhttpd
 /etc/init.d/uhttpd restart
 
 #nginx 设置
-sed -i 's,deny all,allow all,g' /etc/nginx/restrict_locally
-uci delete nginx._redirect2ssl.return
-uci delete nginx._redirect2ssl.include
-uci add_list nginx._redirect2ssl.include='restrict_locally'
-uci add_list nginx._redirect2ssl.include='conf.d/*.locations'
-uci commit nginx
-/etc/init.d/nginx restart
+#sed -i 's,deny all,allow all,g' /etc/nginx/restrict_locally
+#uci delete nginx._redirect2ssl.return
+#uci delete nginx._redirect2ssl.include
+#uci add_list nginx._redirect2ssl.include='restrict_locally'
+#uci add_list nginx._redirect2ssl.include='conf.d/*.locations'
+#uci commit nginx
+#/etc/init.d/nginx restart
 
 #在防火墙默认开启全锥形 NAT 以及关闭 Flow Offloading 并开启 SFE
 uci set firewall.@defaults[0].fullcone4='0'
@@ -77,50 +77,9 @@ done
 uci commit firewall
 /etc/init.d/autocore restart
 
-# einat 启动并确认
-(
-if [ -f /etc/init.d/einat ]; then
-    uci set firewall.@defaults[0].fullcone="0"
-    uci set firewall.@defaults[0].brcmfullcone="0"
-    uci commit firewall
-
-    uci set einat.config.enabled="0"
-    uci set einat.config.bpf_log_level='0'
-    uci commit einat
-
-    retry=0
-    wanif=""
-    while [ "$retry" -lt 30 ] && [ -z "$wanif" ]; do
-        wanif=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
-        if [ -z "$wanif" ]; then
-            retry=`expr $retry + 1`
-            sleep 1
-        fi
-    done
-
-    if [ -n "$wanif" ]; then
-        uci set einat.config.ifname="$wanif"
-        uci set einat.config.enabled="0"
-        uci commit einat
-
-        max_retry=10
-        count=0
-        until ps | grep "[e]inat" >/dev/null 2>&1
-        do
-            /etc/init.d/einat start
-            count=`expr $count + 1`
-            if [ "$count" -ge "$max_retry" ]; then
-                break
-            fi
-            sleep 1
-        done
-    fi
-fi
-) >/dev/null 2>&1 &
-
 #SFE
-sed -i '/shortcutfe/d' /usr/share/rpcd/ucode/luci
-sed -i '/offloading/ a\                shortcutfe: access('\''/etc/init.d/shortcut-fe'\'') == true,' /usr/share/rpcd/ucode/luci
+#sed -i '/shortcutfe/d' /usr/share/rpcd/ucode/luci
+#sed -i '/offloading/ a\                shortcutfe: access('\''/etc/init.d/shortcut-fe'\'') == true,' /usr/share/rpcd/ucode/luci
 
 #默认开启 Packet Steering
 uci set network.globals.packet_steering=$(( $(uname -r | grep -q "^5\.15"; echo $?) ? 2 : 1 ))
@@ -137,8 +96,8 @@ uci set upnpd.config.ext_allow_private_ipv4='1'
 uci commit upnpd
 
 #网易云音乐
-#echo "59.111.239.62 httpdns.n.netease.com" >> /etc/hosts && cat /etc/hosts | sort | uniq > /tmp/tmp_hosts && cat /tmp/tmp_hosts > /etc/hosts
-echo "10 2 * * * cd /usr/share/unblockneteasemusic/core/ && openssl req -new -x509 -key server.key -out server.crt -days 3650  -subj "/CN=*.music.163.com" && cd" >> /etc/crontabs/root && cat /etc/crontabs/root | sort -u > /tmp/tmp_cron_root && cat /tmp/tmp_cron_root > /etc/crontabs/root
+##echo "59.111.239.62 httpdns.n.netease.com" >> /etc/hosts && cat /etc/hosts | sort | uniq > /tmp/tmp_hosts && cat /tmp/tmp_hosts > /etc/hosts
+#echo "10 2 * * * cd /usr/share/unblockneteasemusic/core/ && openssl req -new -x509 -key server.key -out server.crt -days 3650  -subj "/CN=*.music.163.com" && cd" >> /etc/crontabs/root && cat /etc/crontabs/root | sort -u > /tmp/tmp_cron_root && cat /tmp/tmp_cron_root > /etc/crontabs/root
 
 #定时清理
 (crontab -l | sed '/find \/tmp/d'; echo "0 0 1 * * find /tmp -type f \( -name \"*.log\" -o -name \"*.txt\" \) -exec sh -c 'rm {} && touch {}' \;") | sed '/^$/d' | crontab -
@@ -198,27 +157,6 @@ uci set system.@system[0].cronloglevel="9"
 uci commit system
 /etc/init.d/cron restart
 
-# docker mirror
-if [ -f /etc/config/dockerd ] && [ "$(grep -c mirror.aliyuncs.com /etc/config/dockerd)" -eq '1' ] && [ "$VERSION_TYPE" != "minimal" ]; then
-    uci del dockerd.globals.registry_mirrors
-    uci commit dockerd
-fi
-
-if [ -f /etc/config/dockerd ] && [ "$(grep -c dockerpull.com /etc/config/dockerd)" -eq '0' ] && [ "$VERSION_TYPE" != "minimal" ]; then
-    uci add_list dockerd.globals.registry_mirrors="https://dockerpull.com"
-    uci commit dockerd
-fi
-
-if [ -f /etc/config/dockerd ] && [ "$(grep -c dockerproxy.net /etc/config/dockerd)" -eq '0' ] && [ "$VERSION_TYPE" != "minimal" ]; then
-    uci add_list dockerd.globals.registry_mirrors="https://dockerproxy.net"
-    uci commit dockerd
-fi
-
-if [ -f /etc/config/dockerd ] && [ "$(grep -c docker.m.daocloud.io /etc/config/dockerd)" -eq '0' ] && [ "$VERSION_TYPE" != "minimal" ]; then
-    uci add_list dockerd.globals.registry_mirrors='https://docker.m.daocloud.io'
-    uci commit dockerd
-fi
-
 #软链接
 [ ! -f '/usr/bin/ip' ] && [ -f '/sbin/ip' ] && ln -sf /sbin/ip /usr/bin/ip
 [ ! -f '/usr/bin/wget-ssl' ] && [ -f '/usr/bin/wget' ] && ln -sf /usr/bin/wget /usr/bin/wget-ssl
@@ -243,8 +181,8 @@ opkg flag hold dnsmasq-full
 #[ -f '/rom/etc/rpcd_10_system.js' ] && touch /etc/fucked
 
 #禁用Docker自动启动
-uci set dockerd.globals.auto_start='0'
-uci commit dockerd
+#uci set dockerd.globals.auto_start='0'
+#uci commit dockerd
 
 #禁用wrtbwmon自动启动
 uci del wrtbwmon.general.enabled
