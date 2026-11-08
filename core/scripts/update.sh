@@ -192,7 +192,7 @@ run_post_processing() {
     bash "$SCRIPT_DIR/apply_whitelist.sh"
     bash "$SCRIPT_DIR/fix_relative_includes.sh"
     bash "$SCRIPT_DIR/fix_translations.sh"
-    bash "$SCRIPT_DIR/patch_singbox_tiny.sh"
+#    bash "$SCRIPT_DIR/patch_singbox_tiny.sh"
     bash "$SCRIPT_DIR/fix_pkg_version.sh"
     bash "$SCRIPT_DIR/fix_permissions.sh"
 

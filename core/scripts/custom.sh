@@ -16,24 +16,24 @@ fi
 # ------------------------------------------------------------------------------
 # OpenAppFilter
 # ------------------------------------------------------------------------------
-sync_openappfilter() {
-    local target="legacy/OpenAppFilter"
-    log_info "正在同步: $target (sbwml/OpenAppFilter:v6)..."
-    local tmp_dir
-    tmp_dir="$(mktemp -d)"
-
-    if clone_repo "https://github.com/sbwml/OpenAppFilter" "$tmp_dir/OpenAppFilter" "v6"; then
-        sed -i 's/\r$//' "$tmp_dir/OpenAppFilter/open-app-filter/src/appfilter_ubus.c" 2>/dev/null || true
-        if [ -f "$PATCH_DIR/OpenAppFilter-disable-auto-load-engine.patch" ]; then
-            (cd "$tmp_dir" && patch -l -p0 < "$PATCH_DIR/OpenAppFilter-disable-auto-load-engine.patch" 2>/dev/null) || log_warn "OpenAppFilter patch 跳过或已包含"
-        fi
-        deploy_dir "$tmp_dir/OpenAppFilter" "$REPO_ROOT/$target"
-        rm -rf "$tmp_dir"
-        return 0
-    fi
-    rm -rf "$tmp_dir"
-    return 1
-}
+#sync_openappfilter() {
+#    local target="legacy/OpenAppFilter"
+#    log_info "正在同步: $target (sbwml/OpenAppFilter:v6)..."
+#    local tmp_dir
+#    tmp_dir="$(mktemp -d)"
+#
+#    if clone_repo "https://github.com/sbwml/OpenAppFilter" "$tmp_dir/OpenAppFilter" "v6"; then
+#        sed -i 's/\r$//' "$tmp_dir/OpenAppFilter/open-app-filter/src/appfilter_ubus.c" 2>/dev/null || true
+#        if [ -f "$PATCH_DIR/OpenAppFilter-disable-auto-load-engine.patch" ]; then
+#            (cd "$tmp_dir" && patch -l -p0 < "$PATCH_DIR/OpenAppFilter-disable-auto-load-engine.patch" 2>/dev/null) || log_warn "OpenAppFilter patch 跳过或已包含"
+#        fi
+#        deploy_dir "$tmp_dir/OpenAppFilter" "$REPO_ROOT/$target"
+#        rm -rf "$tmp_dir"
+#        return 0
+#    fi
+#    rm -rf "$tmp_dir"
+#    return 1
+#}
 
 # ------------------------------------------------------------------------------
 # openwrt_helloworld
@@ -50,7 +50,7 @@ sync_helloworld() {
             cp -f "$PATCH_DIR/dns2socks-Makefile" "$tmp_dir/openwrt_helloworld/dns2socks/Makefile"
         fi
 
-        rm -rf "$tmp_dir/openwrt_helloworld"/{luci-app-ssr-plus,luci-app-passwall,simple-obfs,lua-neturl,sing-box,luci-app-mihomo,mihomo,luci-app-nikki,nikki,luci-app-homeproxy,luci-app-openclash,luci-app-daed,daed,luci-app-dae,dae,v2ray-geodata}
+        rm -rf "$tmp_dir/openwrt_helloworld"/{luci-app-ssr-plus,luci-app-passwall,simple-obfs,lua-neturl,luci-app-mihomo,mihomo,luci-app-nikki,nikki,luci-app-homeproxy,luci-app-openclash,luci-app-daed,daed,luci-app-dae,dae,v2ray-geodata}
 
         if clone_repo "https://github.com/fw876/helloworld" "$tmp_dir/fw_helloworld"; then
             cp -rf "$tmp_dir/fw_helloworld/lua-neturl" "$tmp_dir/openwrt_helloworld/"
@@ -277,24 +277,24 @@ sync_unblockmusic() {
 # ------------------------------------------------------------------------------
 # luci-app-taskplan
 # ------------------------------------------------------------------------------
-sync_taskplan() {
-    local target="apps/luci-app-taskplan"
-    log_info "正在同步: $target..."
-    local tmp_dir
-    tmp_dir="$(mktemp -d)"
-
-    if clone_repo "https://github.com/sirpdboy/luci-app-taskplan" "$tmp_dir/luci-app-taskplan"; then
-        local menu_file="$tmp_dir/luci-app-taskplan/luci-app-taskplan/root/usr/share/luci/menu.d/luci-app-taskplan.json"
-        if [ -f "$menu_file" ]; then
-            sed -i 's/admin\/control\/taskplan/admin\/system\/taskplan/g' "$menu_file" 2>/dev/null || true
-        fi
-        deploy_dir "$tmp_dir/luci-app-taskplan" "$REPO_ROOT/$target"
-        rm -rf "$tmp_dir"
-        return 0
-    fi
-    rm -rf "$tmp_dir"
-    return 1
-}
+#sync_taskplan() {
+#    local target="apps/luci-app-taskplan"
+#    log_info "正在同步: $target..."
+#    local tmp_dir
+#    tmp_dir="$(mktemp -d)"
+#
+#    if clone_repo "https://github.com/sirpdboy/luci-app-taskplan" "$tmp_dir/luci-app-taskplan"; then
+#        local menu_file="$tmp_dir/luci-app-taskplan/luci-app-taskplan/root/usr/share/luci/menu.d/luci-app-taskplan.json"
+#        if [ -f "$menu_file" ]; then
+#            sed -i 's/admin\/control\/taskplan/admin\/system\/taskplan/g' "$menu_file" 2>/dev/null || true
+#        fi
+#        deploy_dir "$tmp_dir/luci-app-taskplan" "$REPO_ROOT/$target"
+#        rm -rf "$tmp_dir"
+#        return 0
+#    fi
+#    rm -rf "$tmp_dir"
+#    return 1
+#}
 
 # ------------------------------------------------------------------------------
 # uugamebooster
@@ -377,6 +377,72 @@ sync_immortalwrt_luci() {
 }
 
 # ------------------------------------------------------------------------------
+# Lienol/openwrt-package (luci-app-control-timewol)
+# ------------------------------------------------------------------------------
+sync_Lienol_pkg() {
+    log_info "正在同步: Lienol_pkg 模块 (control-timewol)..."
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    local subpaths=(
+        "luci-app-control-timewol"
+    )
+
+    if sparse_clone "https://github.com/Lienol/openwrt-package" "$tmp_dir/upstream" "${subpaths[@]}"; then
+        mkdir -p "$tmp_dir/Lienol_pkg"
+        cp -rf "$tmp_dir/upstream/luci-app-control-timewol" "$tmp_dir/Lienol_pkg/"
+        deploy_dir "$tmp_dir/Lienol_pkg/luci-app-control-timewol" "$REPO_ROOT/apps/luci-app-control-timewol"
+        rm -rf "$tmp_dir"
+        return 0
+    fi
+    rm -rf "$tmp_dir"
+    return 1
+}
+
+# ------------------------------------------------------------------------------
+# nas-packages
+# ------------------------------------------------------------------------------
+sync_nas_pkgs() {
+    local target="legacy/nas_pkgs"
+    log_info "正在同步: $target..."
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    if clone_repo "https://github.com/linkease/nas-packages" "$tmp_dir/upstream"; then
+        mkdir -p "$tmp_dir/nas_pkgs"
+        cp -rf "$tmp_dir/upstream/network/services"/* "$tmp_dir/nas_pkgs/"
+        cp -rf "$tmp_dir/upstream/multimedia"/* "$tmp_dir/nas_pkgs/"
+        cp -rf "$tmp_dir/upstream/README.md" "$tmp_dir/nas_pkgs/"
+        deploy_dir "$tmp_dir/nas_pkgs" "$REPO_ROOT/$target"
+        rm -rf "$tmp_dir"
+        return 0
+    fi
+    rm -rf "$tmp_dir"
+    return 1
+}
+
+# ------------------------------------------------------------------------------
+# nas-luciapk
+# ------------------------------------------------------------------------------
+sync_nas_luci() {
+    local target="legacy/nas_luci"
+    log_info "正在同步: $target..."
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    if clone_repo "https://github.com/linkease/nas-packages-luci" "$tmp_dir/upstream1"; then
+        mkdir -p "$tmp_dir/nas_luci"
+        cp -rf "$tmp_dir/upstream1/luci"/* "$tmp_dir/nas_luci/"
+        cp -rf "$tmp_dir/upstream1/README.md" "$tmp_dir/nas_luci/"
+        deploy_dir "$tmp_dir/nas_luci" "$REPO_ROOT/$target"
+        rm -rf "$tmp_dir"
+        return 0
+    fi
+    rm -rf "$tmp_dir"
+    return 1
+}
+
+# ------------------------------------------------------------------------------
 # lede_pkg (fullconenat-nft, r8168)
 # ------------------------------------------------------------------------------
 sync_lede_pkg() {
@@ -385,14 +451,14 @@ sync_lede_pkg() {
     tmp_dir="$(mktemp -d)"
 
     local subpaths=(
-        "package/network/services/fullconenat-nft"
+#        "package/network/services/fullconenat-nft"
         "package/kernel/r8168"
     )
 
     if sparse_clone "https://github.com/coolsnowwolf/lede" "$tmp_dir/upstream" "${subpaths[@]}"; then
-        mkdir -p "$tmp_dir/invasive_fullcone"
-        cp -rf "$tmp_dir/upstream/package/network/services/fullconenat-nft" "$tmp_dir/invasive_fullcone/"
-        deploy_dir "$tmp_dir/invasive_fullcone/fullconenat-nft" "$REPO_ROOT/invasive/fullconenat-nft"
+#        mkdir -p "$tmp_dir/invasive_fullcone"
+#        cp -rf "$tmp_dir/upstream/package/network/services/fullconenat-nft" "$tmp_dir/invasive_fullcone/"
+#        deploy_dir "$tmp_dir/invasive_fullcone/fullconenat-nft" "$REPO_ROOT/invasive/fullconenat-nft"
 
         mkdir -p "$tmp_dir/apps_lede/r8168"
         cp -rf "$tmp_dir/upstream/package/kernel/r8168" "$tmp_dir/apps_lede/"
@@ -424,7 +490,7 @@ sync_imm_pkg() {
         "libs/libcron"
         "libs/quickjspp"
         "libs/toml11"
-        "net/sing-box"
+#        "net/sing-box"
         "net/frp"
     )
 
@@ -437,10 +503,10 @@ sync_imm_pkg() {
             fi
         done
 
-        local sing_mk="$tmp_dir/$target/sing-box/Makefile"
-        if [ -f "$sing_mk" ]; then
-            sed -i 's|\.\./\.\./|$(TOPDIR)/feeds/packages/|' "$sing_mk" 2>/dev/null || true
-        fi
+#        local sing_mk="$tmp_dir/$target/sing-box/Makefile"
+#        if [ -f "$sing_mk" ]; then
+#            sed -i 's|\.\./\.\./|$(TOPDIR)/feeds/packages/|' "$sing_mk" 2>/dev/null || true
+#        fi
 
         local frp_mk="$tmp_dir/$target/frp/Makefile"
         if [ -f "$frp_mk" ]; then
@@ -464,7 +530,6 @@ sync_imm_pkg() {
 # ------------------------------------------------------------------------------
 run_all_custom_sync() {
     local -a handlers=(
-        sync_openappfilter
         sync_helloworld
         sync_openwrt_pkgs
         sync_openclash
@@ -475,10 +540,12 @@ run_all_custom_sync() {
         sync_openwrt_bandix
         sync_argon_theme
         sync_unblockmusic
-        sync_taskplan
         sync_uugamebooster
         sync_ap_modem
         sync_immortalwrt_luci
+        sync_Lienol_pkg
+        sync_nas_pkgs
+        sync_nas_luci
         sync_lede_pkg
         sync_imm_pkg
     )

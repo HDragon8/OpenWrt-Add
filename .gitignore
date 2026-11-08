@@ -8,4 +8,4 @@ prebuilt/
 staging_feed/
 
 # feed 签名私钥（CI 从 secret 生成，不提交）
-certs/feed-key.pem
+#certs/feed-key.pem
