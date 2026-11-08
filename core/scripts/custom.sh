@@ -50,7 +50,7 @@ sync_helloworld() {
             cp -f "$PATCH_DIR/dns2socks-Makefile" "$tmp_dir/openwrt_helloworld/dns2socks/Makefile"
         fi
 
-        rm -rf "$tmp_dir/openwrt_helloworld"/{luci-app-ssr-plus,luci-app-passwall,simple-obfs,lua-neturl,luci-app-mihomo,mihomo,luci-app-nikki,nikki,luci-app-homeproxy,luci-app-openclash,luci-app-daed,daed,luci-app-dae,dae,v2ray-geodata}
+        rm -rf "$tmp_dir/openwrt_helloworld"/{luci-app-ssr-plus,luci-app-passwall,simple-obfs,lua-neturl,luci-app-mihomo,mihomo,luci-app-nikki,nikki,luci-app-homeproxy,luci-app-openclash,luci-app-daed,daed,luci-app-dae,dae}
 
         if clone_repo "https://github.com/fw876/helloworld" "$tmp_dir/fw_helloworld"; then
             cp -rf "$tmp_dir/fw_helloworld/lua-neturl" "$tmp_dir/openwrt_helloworld/"
