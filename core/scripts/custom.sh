@@ -14,20 +14,35 @@ if ! type log_info >/dev/null 2>&1; then
 fi
 
 # ------------------------------------------------------------------------------
-# OpenAppFilter
+# openwrt_helloworld
 # ------------------------------------------------------------------------------
-#sync_openappfilter() {
-#    local target="legacy/OpenAppFilter"
-#    log_info "正在同步: $target (sbwml/OpenAppFilter:v6)..."
+#sync_helloworld() {
+#    local target="legacy/openwrt_helloworld"
+#    log_info "正在同步: $target (聚合插件)..."
 #    local tmp_dir
 #    tmp_dir="$(mktemp -d)"
 #
-#    if clone_repo "https://github.com/sbwml/OpenAppFilter" "$tmp_dir/OpenAppFilter" "v6"; then
-#        sed -i 's/\r$//' "$tmp_dir/OpenAppFilter/open-app-filter/src/appfilter_ubus.c" 2>/dev/null || true
-#        if [ -f "$PATCH_DIR/OpenAppFilter-disable-auto-load-engine.patch" ]; then
-#            (cd "$tmp_dir" && patch -l -p0 < "$PATCH_DIR/OpenAppFilter-disable-auto-load-engine.patch" 2>/dev/null) || log_warn "OpenAppFilter patch 跳过或已包含"
+#    if clone_repo "https://github.com/sbwml/openwrt_helloworld" "$tmp_dir/openwrt_helloworld"; then
+#        if [ -f "$PATCH_DIR/dns2socks-Makefile" ]; then
+#            mkdir -p "$tmp_dir/openwrt_helloworld/dns2socks"
+#            cp -f "$PATCH_DIR/dns2socks-Makefile" "$tmp_dir/openwrt_helloworld/dns2socks/Makefile"
 #        fi
-#        deploy_dir "$tmp_dir/OpenAppFilter" "$REPO_ROOT/$target"
+#
+#        rm -rf "$tmp_dir/openwrt_helloworld"/{luci-app-ssr-plus,luci-app-passwall,simple-obfs,lua-neturl,luci-app-mihomo,mihomo,luci-app-nikki,nikki,luci-app-homeproxy,luci-app-openclash,luci-app-daed,daed,luci-app-dae,dae}
+#
+#        if clone_repo "https://github.com/fw876/helloworld" "$tmp_dir/fw_helloworld"; then
+#            cp -rf "$tmp_dir/fw_helloworld/lua-neturl" "$tmp_dir/openwrt_helloworld/"
+#            cp -rf "$tmp_dir/fw_helloworld/simple-obfs" "$tmp_dir/openwrt_helloworld/"
+#            cp -rf "$tmp_dir/fw_helloworld/luci-app-ssr-plus" "$tmp_dir/openwrt_helloworld/"
+#            sed -i 's/result.insecure = "0"/result.insecure = "1"/g' "$tmp_dir/openwrt_helloworld/luci-app-ssr-plus/root/usr/share/shadowsocksr/subscribe.lua" 2>/dev/null || true
+#        fi
+#
+#        if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall" "$tmp_dir/passwall"; then
+#            cp -rf "$tmp_dir/passwall/luci-app-passwall" "$tmp_dir/openwrt_helloworld/"
+#            sed -i '/select PACKAGE_trojan-plus/{N;s/default y/default n/;}' "$tmp_dir/openwrt_helloworld/luci-app-passwall/Makefile" 2>/dev/null || true
+#        fi
+#
+#        deploy_dir "$tmp_dir/openwrt_helloworld" "$REPO_ROOT/$target"
 #        rm -rf "$tmp_dir"
 #        return 0
 #    fi
@@ -36,35 +51,25 @@ fi
 #}
 
 # ------------------------------------------------------------------------------
-# openwrt_helloworld
+# openwrt_passwall
 # ------------------------------------------------------------------------------
-sync_helloworld() {
-    local target="legacy/openwrt_helloworld"
+sync_passwall() {
+    local target="legacy/openwrt_passwall"
     log_info "正在同步: $target (聚合插件)..."
     local tmp_dir
     tmp_dir="$(mktemp -d)"
 
-    if clone_repo "https://github.com/sbwml/openwrt_helloworld" "$tmp_dir/openwrt_helloworld"; then
-        if [ -f "$PATCH_DIR/dns2socks-Makefile" ]; then
-            mkdir -p "$tmp_dir/openwrt_helloworld/dns2socks"
-            cp -f "$PATCH_DIR/dns2socks-Makefile" "$tmp_dir/openwrt_helloworld/dns2socks/Makefile"
-        fi
-
-        rm -rf "$tmp_dir/openwrt_helloworld"/{luci-app-ssr-plus,luci-app-passwall,simple-obfs,lua-neturl,luci-app-mihomo,mihomo,luci-app-nikki,nikki,luci-app-homeproxy,luci-app-openclash,luci-app-daed,daed,luci-app-dae,dae}
-
-        if clone_repo "https://github.com/fw876/helloworld" "$tmp_dir/fw_helloworld"; then
-            cp -rf "$tmp_dir/fw_helloworld/lua-neturl" "$tmp_dir/openwrt_helloworld/"
-            cp -rf "$tmp_dir/fw_helloworld/simple-obfs" "$tmp_dir/openwrt_helloworld/"
-            cp -rf "$tmp_dir/fw_helloworld/luci-app-ssr-plus" "$tmp_dir/openwrt_helloworld/"
-            sed -i 's/result.insecure = "0"/result.insecure = "1"/g' "$tmp_dir/openwrt_helloworld/luci-app-ssr-plus/root/usr/share/shadowsocksr/subscribe.lua" 2>/dev/null || true
-        fi
+    if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall-packages" "$tmp_dir/openwrt_passwall"; then
 
         if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall" "$tmp_dir/passwall"; then
-            cp -rf "$tmp_dir/passwall/luci-app-passwall" "$tmp_dir/openwrt_helloworld/"
-            sed -i '/select PACKAGE_trojan-plus/{N;s/default y/default n/;}' "$tmp_dir/openwrt_helloworld/luci-app-passwall/Makefile" 2>/dev/null || true
+            cp -rf "$tmp_dir/passwall/luci-app-passwall" "$tmp_dir/openwrt_passwall/"
         fi
 
-        deploy_dir "$tmp_dir/openwrt_helloworld" "$REPO_ROOT/$target"
+        if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall2" "$tmp_dir/passwall2"; then
+            cp -rf "$tmp_dir/passwall/luci-app-passwall2" "$tmp_dir/openwrt_passwall/"
+        fi
+
+        deploy_dir "$tmp_dir/openwrt_passwall" "$REPO_ROOT/$target"
         rm -rf "$tmp_dir"
         return 0
     fi
@@ -275,28 +280,6 @@ sync_unblockmusic() {
 }
 
 # ------------------------------------------------------------------------------
-# luci-app-taskplan
-# ------------------------------------------------------------------------------
-#sync_taskplan() {
-#    local target="apps/luci-app-taskplan"
-#    log_info "正在同步: $target..."
-#    local tmp_dir
-#    tmp_dir="$(mktemp -d)"
-#
-#    if clone_repo "https://github.com/sirpdboy/luci-app-taskplan" "$tmp_dir/luci-app-taskplan"; then
-#        local menu_file="$tmp_dir/luci-app-taskplan/luci-app-taskplan/root/usr/share/luci/menu.d/luci-app-taskplan.json"
-#        if [ -f "$menu_file" ]; then
-#            sed -i 's/admin\/control\/taskplan/admin\/system\/taskplan/g' "$menu_file" 2>/dev/null || true
-#        fi
-#        deploy_dir "$tmp_dir/luci-app-taskplan" "$REPO_ROOT/$target"
-#        rm -rf "$tmp_dir"
-#        return 0
-#    fi
-#    rm -rf "$tmp_dir"
-#    return 1
-#}
-
-# ------------------------------------------------------------------------------
 # uugamebooster
 # ------------------------------------------------------------------------------
 sync_uugamebooster() {
@@ -472,11 +455,11 @@ sync_lede_pkg() {
 }
 
 # ------------------------------------------------------------------------------
-# imm_pkg (sing-box, frp, cpulimit 等)
+# imm_pkg (frp, cpulimit 等)
 # ------------------------------------------------------------------------------
 sync_imm_pkg() {
     local target="apps/imm_pkg"
-    log_info "正在同步: $target (sing-box, frp, cpulimit 及核心依赖)..."
+    log_info "正在同步: $target (frp, cpulimit 及核心依赖)..."
     local tmp_dir
     tmp_dir="$(mktemp -d)"
 
@@ -490,7 +473,6 @@ sync_imm_pkg() {
         "libs/libcron"
         "libs/quickjspp"
         "libs/toml11"
-#        "net/sing-box"
         "net/frp"
     )
 
@@ -502,11 +484,6 @@ sync_imm_pkg() {
                 cp -rf "$tmp_dir/upstream/$sub" "$tmp_dir/$target/$dir_name"
             fi
         done
-
-#        local sing_mk="$tmp_dir/$target/sing-box/Makefile"
-#        if [ -f "$sing_mk" ]; then
-#            sed -i 's|\.\./\.\./|$(TOPDIR)/feeds/packages/|' "$sing_mk" 2>/dev/null || true
-#        fi
 
         local frp_mk="$tmp_dir/$target/frp/Makefile"
         if [ -f "$frp_mk" ]; then
@@ -530,7 +507,7 @@ sync_imm_pkg() {
 # ------------------------------------------------------------------------------
 run_all_custom_sync() {
     local -a handlers=(
-        sync_helloworld
+        sync_passwall
         sync_openwrt_pkgs
         sync_openclash
         sync_autocore_arm

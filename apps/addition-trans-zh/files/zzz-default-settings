@@ -6,8 +6,8 @@ uci set luci.main.lang=auto
 uci commit luci
 
 #自动挂载
-uci set fstab.@global[0].anon_mount=1
-uci commit fstab
+#uci set fstab.@global[0].anon_mount=1
+#uci commit fstab
 
 #时区设置
 uci set system.@system[0].timezone='CST-8'
@@ -40,10 +40,10 @@ uci set uhttpd.main.script_network_timeout=65535
 uci commit uhttpd
 
 #防火墙设置
-uci set firewall.@defaults[0].input='ACCEPT'
-uci set firewall.@defaults[0].synflood_protect='0'
-uci set firewall.@defaults[0].flow_offloading='1'
-uci commit firewall
+#uci set firewall.@defaults[0].input='ACCEPT'
+#uci set firewall.@defaults[0].synflood_protect='0'
+#uci set firewall.@defaults[0].flow_offloading='1'
+#uci commit firewall
 
 #Packet Steering
 uci set network.globals.packet_steering='2'
@@ -62,22 +62,22 @@ uci set upnpd.config.stun_host='stun.miwifi.com'
 uci commit upnpd
 
 #dnsmasq 设置以及开启 IPv6
-uci del dhcp.lan.ra 2>/dev/null
-uci del dhcp.lan.dhcpv6 2>/dev/null
-uci del dhcp.lan.ndp 2>/dev/null
-uci del dhcp.lan.ra_useleasetime 2>/dev/null
-uci del dhcp.lan.preferred_lifetime 2>/dev/null
-uci set dhcp.lan.leasetime='12h'
-uci set dhcp.lan.ra='server'
-uci del dhcp.lan.ra_flags 2>/dev/null
-uci add_list dhcp.lan.ra_flags='none'
-uci del dhcp.lan.min_preferred_lifetime 2>/dev/null
-uci set dhcp.lan.max_preferred_lifetime='2700s'
-uci del dhcp.lan.min_valid_lifetime 2>/dev/null
-uci set dhcp.lan.max_valid_lifetime='5400s'
-uci set dhcp.lan.dns_service='0'
-uci set dhcp.@dnsmasq[0].rebind_protection='0'
-uci commit dhcp
+#uci del dhcp.lan.ra 2>/dev/null
+#uci del dhcp.lan.dhcpv6 2>/dev/null
+#uci del dhcp.lan.ndp 2>/dev/null
+#uci del dhcp.lan.ra_useleasetime 2>/dev/null
+#uci del dhcp.lan.preferred_lifetime 2>/dev/null
+#uci set dhcp.lan.leasetime='12h'
+#uci set dhcp.lan.ra='server'
+#uci del dhcp.lan.ra_flags 2>/dev/null
+#uci add_list dhcp.lan.ra_flags='none'
+#uci del dhcp.lan.min_preferred_lifetime 2>/dev/null
+#uci set dhcp.lan.max_preferred_lifetime='2700s'
+#uci del dhcp.lan.min_valid_lifetime 2>/dev/null
+#uci set dhcp.lan.max_valid_lifetime='5400s'
+#uci set dhcp.lan.dns_service='0'
+#uci set dhcp.@dnsmasq[0].rebind_protection='0'
+#uci commit dhcp
 [ -f /etc/dnsmasq.conf ] && sed -i '/log-facility/d' /etc/dnsmasq.conf && echo "log-facility=/dev/null" >> /etc/dnsmasq.conf
 
 #rpcd
