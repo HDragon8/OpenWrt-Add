@@ -495,3 +495,57 @@ test('Interfaces: an open device tooltip escapes the scrolling table card (last 
 	const scroller = themeRules.findIndex((x) => !x.media && x.sel.includes('.cbi-tblsection') && /overflow-x:\s*auto/.test(x.body));
 	assert.ok(scroller >= 0 && themeRules.indexOf(r) > scroller);
 });
+
+/* Appearance: every option of a group one column of the same width, the
+   widest label's, and each label as wide as it is bold, picked, so a pick
+   moves no column (a label still never shrinks below its own width) */
+test('Appearance: equal columns, bold width kept for every label', () => {
+	const track = themeRules.find(r => r.sel.includes('.vt-appear-track'));
+	assert.ok(track, 'track rule');
+	assert.match(track.body, /display:\s*grid/);
+	assert.match(track.body, /grid-auto-flow:\s*column/);
+	assert.match(track.body, /grid-auto-columns:\s*1fr\b/);
+	const opt = themeRules.find(r => r.sel.includes('.vt-appear-opt'));
+	assert.doesNotMatch(opt.body, /min-width:\s*0/, 'a column keeps its label\'s width');
+	const after = themeRules.find(r => r.sel.includes('.vt-appear-opt > span::after'));
+	assert.ok(after, 'the bold copy');
+	assert.match(after.body, /content:\s*attr\(data-text\)\s*\/\s*""/, 'no second reading for screen readers');
+	assert.match(after.body, /font-weight:\s*600/);
+	assert.match(after.body, /visibility:\s*hidden/);
+	const picked = themeRules.find(r => r.sel.includes('.vt-appear-opt:has(> input:checked)'));
+	assert.match(picked.body, /font-weight:\s*600/, 'the same weight as the copy');
+	assert.match(menuJs, /E\('span', \{ 'data-text': o\[1\] \}, \[ o\[1\] \]\)/);
+});
+
+test('Wireless: a network\'s second line starts under its name; the hidden " | " take no gap (#122)', () => {
+	const box = themeRules.find(r => r.sel.includes('.td[data-name="_stat"] > div') && r.sel.includes('.td[data-name="_stat"] > div > div'));
+	assert.match(box.body, /font-size:\s*0/, 'the separators stay hidden');
+	assert.match(box.body, /gap:\s*4px 0\s*;/, 'no column gap: a gap also surrounds each hidden separator');
+	const item = themeRules.find(r => r.sel.length === 1 && r.sel[0] === '.td[data-name="_stat"] .nowrap');
+	assert.match(item.body, /margin-inline-end:\s*20px/, 'items keep their spacing as a margin');
+	const name = themeRules.find(r => r.sel.length === 1 && r.sel[0] === '.td[data-name="_stat"] > div > .nowrap:first-child');
+	assert.match(name.body, /margin-inline-end:\s*0/);
+});
+
+test('Wireless: one line above a radio, not the row\'s border and its own (#122)', () => {
+	const radio = themeRules.find(r => r.sel.length === 1 && r.sel[0] === '.cbi-section-table-row:has(> .td[data-name="_stat"] big) > .td');
+	assert.ok(radio && !/border-top/.test(radio.body), 'no top border of its own');
+	const above = themeRules.find(r => r.sel.length === 1 && r.sel[0] === '.cbi-section-table-row:has(+ .cbi-section-table-row > .td[data-name="_stat"] big) > .td');
+	assert.match(above.body, /border-bottom-color:\s*var\(--line-2\)/, 'the row above recolours its own');
+});
+
+test('a table section without column titles meets its heading (Wireless, #122); titled ones keep the space', () => {
+	/* the helper splits at commas inside nested parentheses: rejoin */
+	const rule = themeRules.find(r => r.sel[0].startsWith('#view .cbi-tblsection:not(.cbi-section .cbi-section) > h3:first-child:has('));
+	assert.ok(rule);
+	const sel = rule.sel.join(', ');
+	assert.match(rule.body, /margin-bottom:\s*0/);
+	assert.match(sel, /\+ \.table > :is\(tbody, \.tbody\):first-child/, '25.12: a thead comes first only with titles');
+	assert.match(sel, /\+ \.table > \.tr:first-child:not\(\.cbi-section-table-titles, \.table-titles\)\)$/, '24.10: rows in the table');
+});
+
+test('a network\'s status keeps its details in place as the signal reading changes (#122)', () => {
+	const sig = themeRules.find(r => r.sel.length === 1 && r.sel[0] === '.ifacebadge.large > small:first-child');
+	assert.match(sig.body, /min-width:\s*8\.5em/);
+	assert.match(sig.body, /flex:\s*none/);
+});

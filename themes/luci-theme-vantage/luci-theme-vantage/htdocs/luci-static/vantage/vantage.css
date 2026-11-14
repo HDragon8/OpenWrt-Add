@@ -55,7 +55,11 @@
 	--ctl-h: 36px;              /* every control: inputs, selects, buttons, tabs, chips */
 	--label-w: 180px;           /* form label column */
 	--field-max: 360px;         /* widest single-line field */
-	--content-max: 1320px;
+	--content-max: 1320px;      /* content column, on windows up to ~1920px */
+	--content-wide: 2400px;     /* wider windows: the column grows to this */
+	/* the column's width with its padding: grows with the window past
+	   1920px, ~200px clear each side, so 2K and 4K screens at 100% fill */
+	--main-max: clamp(calc(var(--content-max) + 2 * var(--sp-6)), 100% - 400px, calc(var(--content-wide) + 2 * var(--sp-6)));
 
 	/* light: cool paper grey, olive accent text */
 	--bg: #e9ecef;
@@ -620,7 +624,7 @@ a.vt-crumb:hover { color: var(--text); }
 .vt-icon-btn .vt-fill, .vt-pal .vt-fill, .vt-appearance .vt-fill { fill: currentColor; stroke: none; }
 .vt-icon-btn[aria-expanded="true"] { background: var(--s3); color: var(--text); border-color: var(--line); }
 
-/* Appearance (menu-vantage.js), under the colour-theme button: each
+/* Appearance (menu-vantage.js), under the gear button: each
    setting a native radio group drawn as segments, like the page tabs */
 .vt-appearance {
 	position: fixed; z-index: 1100;
@@ -642,16 +646,24 @@ a.vt-crumb:hover { color: var(--text); }
 .vt-appear-update { display: block; margin-top: 4px; color: var(--text-2); }
 .vt-appear-update[hidden] { display: none; }
 .vt-appear-set > legend { margin: 0 0 6px; padding: 0; color: var(--text-3); font-size: var(--fs-micro); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
-.vt-appear-track { display: flex; background: var(--seg-bg); border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--line); }
+.vt-appear-track {
+	/* every option one column of the same width, the widest label's: the
+	   panel is as wide as the row that needs most */
+	display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+	background: var(--seg-bg); border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--line);
+}
 .vt-appear-opt {
-	position: relative; flex: 1 1 0;
+	position: relative;
 	display: flex; align-items: center; justify-content: center; gap: 6px;
-	min-height: var(--ctl-h); padding: 0 12px;
+	min-height: var(--ctl-h); padding: 0 6px;
 	border: 3px solid transparent; background-clip: padding-box;
 	border-radius: calc(var(--r) + 3px);
 	color: var(--text-2); font-weight: 500; white-space: nowrap;
 	cursor: pointer;
 }
+/* each label as wide as it is bold, picked: a pick changes no width */
+.vt-appear-opt > span { display: inline-flex; flex-direction: column; align-items: center; }
+.vt-appear-opt > span::after { content: attr(data-text) / ""; height: 0; overflow: hidden; visibility: hidden; font-weight: 600; pointer-events: none; user-select: none; }
 .vt-appear-opt:hover { color: var(--text); }
 .vt-appear-opt > input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
 .vt-appear-opt:has(> input:checked) { background-color: var(--seg-on); color: var(--accent-text); font-weight: 600; box-shadow: var(--seg-on-ring); }
@@ -668,7 +680,10 @@ a.vt-crumb:hover { color: var(--text); }
 	color: var(--text-2);
 	font-size: var(--fs-sm);
 	white-space: nowrap;
+	text-decoration: none !important;
 }
+/* a link to Status → Overview (header.ut), drawn like the icon buttons */
+.vt-host:hover { background: var(--s3); border-color: var(--line-2); }
 .vt-host b { color: var(--text); font-weight: 600; }
 .vt-host span { overflow: hidden; text-overflow: ellipsis; }
 .vt-host-sep { color: var(--text-3); }
@@ -704,6 +719,9 @@ a.vt-crumb:hover { color: var(--text); }
 	background: color-mix(in oklab, var(--ok) 50%, transparent);
 	opacity: 0; pointer-events: none;
 	animation: vt-live-soft 5s ease-out infinite;
+	/* its layer stays while the animation stands paused between the
+	   theme's clock ticks (menu-vantage.js stepPulses) */
+	will-change: transform, opacity;
 }
 html[data-vt-live="err"] #indicators > span[data-indicator="poll-status"][data-style="active"]::after, html[data-vt-alert="warn"] #indicators > span[data-indicator="poll-status"][data-style="active"]::after {
 	background: color-mix(in oklab, var(--warn) 50%, transparent);
@@ -717,6 +735,8 @@ html[data-vt-alert="err"] #indicators > span[data-indicator="poll-status"][data-
 	html[data-vt-live="err"] #indicators > span[data-indicator="poll-status"][data-style="active"]::before, html[data-vt-alert="warn"] #indicators > span[data-indicator="poll-status"][data-style="active"]::before { background: var(--warn); }
 	html[data-vt-alert="err"] #indicators > span[data-indicator="poll-status"][data-style="active"]::before { background: var(--err); }
 }
+/* another window has the focus, or Low-power router is on (menu-vantage.js): no pulse */
+:is(html[data-vt-blur], html[data-vt-power="low"]) #indicators > span[data-indicator="poll-status"][data-style="active"]::after { animation: none; }
 @keyframes vt-live-soft { 0% { transform: scale(1); opacity: .6; } 70%, 100% { transform: scale(2.2); opacity: 0; } }
 @keyframes vt-live { 0% { transform: scale(1); opacity: 1; } 70%, 100% { transform: scale(2.7); opacity: 0; } }
 #indicators > span[data-indicator="poll-status"][data-style="inactive"]::before {
@@ -746,7 +766,7 @@ html[data-vt-alert="err"] #indicators > span[data-indicator="poll-status"][data-
    level (.vt-pagetabs shares the .cbi-tabmenu rules below). They scroll with
    the page; the current crumb in the top bar switches between them. */
 .vt-tabs {
-	width: 100%; max-width: calc(var(--content-max) + 2 * var(--sp-6));
+	width: 100%; max-width: var(--main-max);
 	margin: 0 auto; padding: var(--sp-6) var(--sp-6) 0;
 }
 .vt-tabs:not([hidden]) + .vt-main { padding-top: var(--sp-5); }
@@ -755,7 +775,7 @@ html[data-vt-alert="err"] #indicators > span[data-indicator="poll-status"][data-
 .vt-main {
 	flex: 1 1 auto;
 	width: 100%;
-	max-width: calc(var(--content-max) + 2 * var(--sp-6));
+	max-width: var(--main-max);
 	padding: var(--sp-6);
 	margin: 0 auto;
 }
@@ -1231,7 +1251,9 @@ input[readonly] { cursor: default; }
 	   one under the pointer or the keyboard on --s4, the keyboard's with
 	   the accent bar */
 	:is(.vt-main, .modal) select:not([multiple], [size], [style*="width:auto"], .vt-app *) option::checkmark { display: none; }
-	:is(.vt-main, .modal) select:not([multiple], [size], [style*="width:auto"], .vt-app *) option:checked { color: var(--accent-text); font-weight: 600; background: var(--accent-soft); }
+	/* the tint over an opaque fill: apps that copy a select's option colour
+	   onto their own list (PassWall's node picker) would get a see-through one */
+	:is(.vt-main, .modal) select:not([multiple], [size], [style*="width:auto"], .vt-app *) option:checked { color: var(--accent-text); font-weight: 600; background: linear-gradient(var(--accent-soft) 0 0) var(--s2); }
 	:is(.vt-main, .modal) select:not([multiple], [size], [style*="width:auto"], .vt-app *) option:is(:hover, :focus-visible) { background: var(--s4); color: var(--text); outline: none; }
 	:is(.vt-main, .modal) select:not([multiple], [size], [style*="width:auto"], .vt-app *) option:focus-visible { box-shadow: inset 2px 0 0 var(--accent-text); }
 	:is(.vt-main, .modal) select:not([multiple], [size], [style*="width:auto"], .vt-app *) option:disabled { color: var(--text-3); background: none; cursor: not-allowed; }
@@ -1911,6 +1933,10 @@ div.right > .btn, div.right > .cbi-button, div.right > button { margin-left: 0; 
 .ifacebadge img { width: 16px; height: 16px; }
 .ifacebadge.large { padding: 6px 10px; gap: 8px; font-size: var(--fs-base); }
 .ifacebadge.large img { width: 20px; height: 20px; }
+/* a network's status (Wireless, its dialog): the signal beside the details
+   keeps one width, wide enough for "-100/-110 dBm", so the details do not
+   move as the reading changes (#122) */
+.ifacebadge.large > small:first-child { flex: none; min-width: 8.5em; text-align: center; }
 .ifacebadge-active { border-color: var(--accent-line); box-shadow: inset 0 0 0 1px var(--accent-line); }
 /* the device details tooltip (Interfaces): icon beside the details */
 .cbi-tooltip.ifacebadge { display: inline-grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
@@ -2375,6 +2401,10 @@ body.modal-overlay-active #modal_overlay { display: block; }
 #view .cbi-section > .cbi-title:has(+ div > .table:first-child),
 #view > .cbi-section > h3:first-child:has(+ div > .table:first-child),
 #view .cbi-section:not(.cbi-tblsection, .cbi-section .cbi-section) > h3:first-child:has(+ .table) { margin-bottom: 0; }
+/* a table section whose table starts with its rows, no column titles
+   (Network -> Wireless): the band read as a taller first row (#122).
+   LuCI 25.12 adds a thead only for titles; 24.10 puts rows in the table */
+#view .cbi-tblsection:not(.cbi-section .cbi-section) > h3:first-child:has(+ .table > :is(tbody, .tbody):first-child, + .table > .tr:first-child:not(.cbi-section-table-titles, .table-titles)) { margin-bottom: 0; }
 #view > h2:not(:first-child), #view > h3:not(:first-child) { margin-top: var(--sp-6); }
 .cbi-section > .table + h3, .cbi-section > .table + .cbi-title, .cbi-section > div + h3 { margin-top: var(--sp-6); }
 .includes { margin-top: var(--sp-4); }
@@ -2632,7 +2662,7 @@ html:not([data-darkmode="true"]) .vt-login-page {
 .vt-login-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-6); }
 .vt-login-mark { flex: none; }
 .vt-login-title { margin: 0; font-size: var(--fs-lg); font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
-.vt-login-error {
+.vt-login-error, .vt-login-info {
 	margin: 0 0 var(--sp-4);
 	padding: var(--sp-2) var(--sp-3);
 	border: 1px solid color-mix(in srgb, var(--err) 45%, transparent);
@@ -2641,7 +2671,14 @@ html:not([data-darkmode="true"]) .vt-login-page {
 	border-radius: var(--r);
 	font-size: var(--fs-sm);
 }
+.vt-login-info {
+	border-color: color-mix(in srgb, var(--info) 45%, transparent);
+	border-left-color: var(--info);
+	background: var(--info-soft);
+}
 .vt-login-form { display: flex; flex-direction: column; gap: var(--sp-4); }
+/* a plugin's guidance (sysauth.ut) sits in the form, spaced by its gap */
+.vt-login-form > :is(.vt-login-error, .vt-login-info) { margin: 0; }
 .vt-field { display: flex; flex-direction: column; gap: 6px; }
 .vt-field-label { color: var(--text-3); font-size: var(--fs-micro); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .vt-field input {
@@ -2707,18 +2744,23 @@ body[data-page="admin-statistics-graphs"] p.controls > .nowrap > .cbi-button { m
 
 /* Network -> Wireless: radios as group headers, networks as rows */
 .td[data-name="_badge"] > .center { text-align: left; }
+/* the space between items is each item's own margin, not a gap: a
+   hidden " | " is still a flex item, and a gap around it indented a line
+   that starts with one (a network's second line, #122) */
 .td[data-name="_stat"] > div, .td[data-name="_stat"] > div > div {
-	display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px;
+	display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 0;
 	font-size: 0;                         /* hides the " | " separators */
 }
 .td[data-name="_stat"] > div > br, .td[data-name="_stat"] > div > div > br { display: none; }
-.td[data-name="_stat"] .nowrap { display: inline-flex; align-items: baseline; gap: 6px; font-size: var(--fs-base); }
+.td[data-name="_stat"] .nowrap { display: inline-flex; align-items: baseline; gap: 6px; margin-inline-end: 20px; font-size: var(--fs-base); }
 .td[data-name="_stat"] > div > big { flex-basis: 100%; font-size: var(--fs-md); }
 .td[data-name="_stat"] > div > div { flex-basis: 100%; }
-.td[data-name="_stat"] > div > .nowrap:first-child { flex-basis: 100%; font-size: var(--fs-md); font-weight: 600; }
+.td[data-name="_stat"] > div > .nowrap:first-child { flex-basis: 100%; margin-inline-end: 0; font-size: var(--fs-md); font-weight: 600; }
 .td[data-name="_stat"] > div > .nowrap:first-child > strong { display: none; }
-.cbi-section-table-row:has(> .td[data-name="_stat"] big) > .td { background: var(--s2); border-top: 1px solid var(--line-2); }
-.cbi-section-table-row:has(> .td[data-name="_stat"] big):first-child > .td { border-top: 0; }
+.cbi-section-table-row:has(> .td[data-name="_stat"] big) > .td { background: var(--s2); }
+/* the darker line above a radio is the row above's own bottom border:
+   a top border of its own stacked under it as a double line (#122) */
+.cbi-section-table-row:has(+ .cbi-section-table-row > .td[data-name="_stat"] big) > .td { border-bottom-color: var(--line-2); }
 .cbi-section-table-row:not(:has(big)) > .td[data-name="_badge"] { padding-left: calc(var(--card-px) + 16px); }
 
 /* progress bars (their text only exists in title): a thin track, the

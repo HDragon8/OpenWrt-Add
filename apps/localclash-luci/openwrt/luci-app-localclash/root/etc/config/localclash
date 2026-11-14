@@ -1,3 +1,8 @@
 config subscription_schedule 'subscription_schedule'
 	option enabled '0'
 	option update_hour '0'
+
+config pool_schedule 'pool_schedule'
+	option enabled '0'
+	option period '15m'
+	option enhanced_filter '0'

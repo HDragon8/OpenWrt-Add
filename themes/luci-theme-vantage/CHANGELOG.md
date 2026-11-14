@@ -6,6 +6,111 @@ Each release ships both packages, `luci-theme-vantage` and
 <https://github.com/anothaDev/luci-theme-vantage/releases> and in the
 [signed repositories](https://anothadev.github.io/luci-theme-vantage/).
 
+## 1.0.20 - 2026-11-12
+
+- **rpcd no longer crashes on MediaTek mtwifi routers** (#124,
+  [@zy912172991-cell](https://github.com/zy912172991-cell)). 1.0.19's
+  dashboard asked rpcd for the radios' channel survey on every refresh,
+  and rpcd calls a function that only libiwinfo's nl80211 backend has:
+  on any other, such as MediaTek's mtwifi in the mt798x builds, each
+  refresh crashed rpcd and took LuCI down with it. Vantage's own plugin
+  now reads the survey from the kernel, and only for interfaces that
+  cfg80211 drives. The dashboard's read permission (`luci-app-vantage`)
+  no longer grants `iwinfo survey` and grants `luci.vantage survey`
+  instead; the app now depends on `ucode-mod-nl80211`. **If 1.0.19 took
+  LuCI down on your router, close every LuCI tab and upgrade over SSH:**
+  `apk update && apk add --upgrade luci-app-vantage luci-theme-vantage`
+  (24.10: `opkg update && opkg upgrade luci-app-vantage
+  luci-theme-vantage`), then `/etc/init.d/rpcd restart`.
+- **Dashboard: radio cards wide enough for their channel** (#122,
+  [@VIKINGYFY](https://github.com/VIKINGYFY)). The radio cards widen
+  together, up to 240 px, when a label such as "Ch 128 · 160 MHz" needs
+  it, instead of cutting it off.
+- **Dashboard: the uplink's link rate on a line of its own when needed**
+  (#122). When the uplink card's line does not fit, the link rate moves
+  whole to the next line instead of breaking after "Gbit/" or inside
+  "链路".
+- **Wireless: a tidier list** (#122). No empty band above the first
+  radio, a network's second line starts under its name, radios are
+  separated by one line instead of two, and the signal in a network's
+  status keeps one width, so the details beside it no longer move.
+
+## 1.0.19 - 2026-11-11
+
+- **Dashboard: less router work again** (#101,
+  [@Groupguanfang](https://github.com/Groupguanfang)). Radio details
+  (16-22 ms a radio on an access point) are asked every 30 seconds, or
+  at once when a radio's channel or state changes; the noise floor still
+  comes every poll, from the radio's channel survey (1.5-2 ms); device
+  names from the DHCP leases every 30 seconds, and right after a device
+  appears. On a 4-core access point a minute of polling went from about
+  850 ms of CPU to 490 ms. The dashboard's read permission
+  (`luci-app-vantage`) now also grants `iwinfo survey` (read-only).
+- **Dashboard: wired devices on routers with a switch chip** (#101). The
+  full read of the bridges' device table also has the switch driver read
+  its chip's own table (29 ms on a MediaTek MT7981); it now runs only
+  when a device joins, leaves or changes port, or every 30 seconds, and
+  most refreshes read the kernel's own copy (0.1 ms).
+- **Dashboard: the CPU card no longer says "Measuring"** (#101). Until
+  its first reading, about a second after the page opens, it shows this
+  browser's last reading of the router (under ten minutes old) or 0%.
+- **Dashboard: Wi-Fi clients on a router keep their IPv4 address**
+  (#110, [@MohdMusab](https://github.com/MohdMusab)). They were filtered
+  by the internet line's subnet, so they showed only an IPv6 address and
+  reverse DNS and mDNS could not name them.
+- **Lighter motion.** The pulses (the status circle's ring, the Live
+  beat, the top bar's refresh dot on every refreshing page) and the
+  network path's backdrop move 15-20 times a second instead of 60, and
+  look the same: the browser draws far fewer frames for them.
+- **Appearance: options of equal width**; "Grid packets" is now "Grid".
+
+## 1.0.18 - 2026-11-10
+
+- **Dashboard: much less work for the router** (#101,
+  [@Groupguanfang](https://github.com/Groupguanfang)). The dashboard's
+  server side rebuilt its text patterns on every check, which cost
+  milliseconds each on a router, and radio details were asked once a
+  network instead of once a radio: on a 4-core access point a whole
+  5-second poll went from about 180 ms of CPU to 70 ms (the dashboard's
+  own calls from about 120 ms to 15 ms), with the same answers. A reload
+  no longer polls twice or reads the page's own build as the CPU load, so
+  the CPU card stops jumping to 100% on every refresh.
+- **Dashboard: Low-power router** (#101). Appearance → Low-power router
+  (with the dashboard; off by default) keeps the live numbers but asks
+  for the slow parts (Wi-Fi state, radio details, temperatures, wired
+  hosts) every 30 seconds, drops the network path's backdrop and moving
+  dots and the login page's particles, and after 5 minutes without input
+  refreshes every 30 seconds until you touch the page again.
+- **Dashboard: a far-away device needn't warn** (#110,
+  [@MohdMusab](https://github.com/MohdMusab)). A device's details have
+  "Don't warn about its signal": its weak signal then stays out of the
+  Signal warning, for every browser. It is kept beside the names in
+  `/etc/config/vantage`, through the dashboard's names permission
+  (`luci-app-vantage-names` now also grants `luci.vantage set_quiet`).
+- **Dashboard: a radio you switched off is no warning** (#110). The Wi-Fi
+  card still says it is off.
+- **Theme: a one-click light/dark switch and a gear for Appearance**
+  (#109, [@Gimenz](https://github.com/Gimenz)). The sun/moon cycles
+  automatic, the look your system doesn't use, the one it does; the gear
+  next to it opens Appearance. The hostname · model chip opens Status →
+  Overview.
+- **Check for updates works.** The package build's minifier changed one
+  pattern, so the check could never read the list on a router (#109).
+- **Theme: wide screens** (#113,
+  [@smallprogram](https://github.com/smallprogram)). Past about 1920
+  pixels the content column grows with the window, up to 2400 pixels,
+  instead of leaving most of a 2K or 4K screen empty.
+- **Theme: PassWall's node list is opaque again** (#112,
+  [@trosh2023](https://github.com/trosh2023)). Since Chrome 135 it copied
+  a see-through colour from the selected option.
+- **Theme: logins with a second factor** (#114,
+  [@yipush](https://github.com/yipush)). With LuCI's authentication
+  plugins (luci-plugin-2fa, after 25.12) the login page shows their
+  fields, guidance and errors, and their own content.
+- **Motion stops while you're in another window**: the dashboard's
+  moving parts and the top bar's refresh dot stand still until the window
+  has the focus again; the numbers keep updating.
+
 ## 1.0.17 - 2026-11-08
 
 - **Install commands stop when a check fails.** Each pasted block now
