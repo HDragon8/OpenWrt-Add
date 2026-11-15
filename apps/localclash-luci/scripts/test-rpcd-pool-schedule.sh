@@ -122,7 +122,13 @@ cat > "$worker" <<'WORKER'
 [ "$1" = features ] || exit 1
 printf '{"enhanced_filter":true}\n'
 WORKER
-pool_schedule_get | jq -e '.enhanced_filter_available == true' >/dev/null
+pool_schedule_get | jq -e '.enhanced_filter_available == true and .enhanced_chatgpt_streaming == false' >/dev/null
+cat > "$worker" <<'WORKER'
+#!/bin/sh
+[ "$1" = features ] || exit 1
+printf '{"enhanced_filter":true,"enhanced_chatgpt_streaming":true}\n'
+WORKER
+pool_schedule_get | jq -e '.enhanced_filter_available == true and .enhanced_chatgpt_streaming == true' >/dev/null
 if result="$(printf '{"enabled":true,"period":"daily-08","enhanced_filter":2}\n' | pool_schedule_set)"; then
 	echo "Accepted an invalid enhanced filtering setting" >&2
 	exit 1
@@ -192,4 +198,13 @@ printf '%s\n' "$result" | jq -e '.schedule == {"enabled":false,"period":"15m","e
 [ ! -f "$test_dir/enabled" ] && [ ! -f "$test_dir/running" ]
 apply_pool_capability true | jq -e '.status.enabled == true' >/dev/null
 [ ! -f "$test_dir/enabled" ] && [ ! -f "$test_dir/running" ]
+
+TASK_STATUS="$test_dir/pool-task.json"
+for requested in true false; do
+	write_task_running "线路池后台任务" pool_capability pool-test "$requested"
+	jq -e --argjson requested "$requested" '.task_id == "pool-test" and .running and .requested_enabled == $requested' "$TASK_STATUS" >/dev/null
+	write_task_done 0 '{"ok":true}'
+	jq -e '.task == "pool_capability" and .task_id == "pool-test" and .done and .result.ok' "$TASK_STATUS" >/dev/null
+done
+
 printf 'pool scheduler service tests passed\n'
