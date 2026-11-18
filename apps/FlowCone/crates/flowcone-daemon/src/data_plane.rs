@@ -35,9 +35,7 @@ fn attach_classifier(
         TcAttachType::Egress => "egress",
     };
 
-    // bpf_link_update() is a no-op for a live link and fails with -ENOLINK once
-    // the net_device is gone, so the old link is taken either way and only
-    // updated while force_new is off (then the interface instance did not change).
+    // Reuse existing link if valid and interface instance has not changed.
     let old_link = previous
         .take()
         .and_then(|link_id| prog.take_link(link_id).ok());
@@ -126,12 +124,7 @@ fn tcx_is_tail(
     Ok(programs.last().map(|p| p.id() == prog_id).unwrap_or(false))
 }
 
-/// Loaded eBPF object plus the currently attached link ids.
-///
-/// The attached links are tiny A/B tail-call dispatchers. The real ingress/
-/// egress implementation is loaded once and referenced by two ProgramArray
-/// maps; both dispatchers call the same idempotent program, so a tail move can
-/// attach B, switch, and remove A without a WAN gap or double NAT.
+/// Manages loaded eBPF programs, target maps, and TCX A/B dispatchers.
 pub(crate) struct DataPlane {
     bpf: aya::Ebpf,
     iface: String,
@@ -182,7 +175,6 @@ impl DataPlane {
 
     pub(crate) fn start(bpf: aya::Ebpf, iface: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let mut bpf = bpf;
-        // Load the real programs once; they are tail-call targets, not links.
         load_classifier(&mut bpf, "flowcone_tcx_ingress").map_err(
             |e| -> Box<dyn std::error::Error> {
                 format!("load target flowcone_tcx_ingress: {e}").into()
@@ -193,9 +185,14 @@ impl DataPlane {
                 format!("load target flowcone_tcx_egress: {e}").into()
             },
         )?;
-        load_classifier(&mut bpf, "flowcone_frag_v6").map_err(
+        load_classifier(&mut bpf, "flowcone_frag_v6_ingress").map_err(
             |e| -> Box<dyn std::error::Error> {
-                format!("load target flowcone_frag_v6: {e}").into()
+                format!("load target flowcone_frag_v6_ingress: {e}").into()
+            },
+        )?;
+        load_classifier(&mut bpf, "flowcone_frag_v6_egress").map_err(
+            |e| -> Box<dyn std::error::Error> {
+                format!("load target flowcone_frag_v6_egress: {e}").into()
             },
         )?;
         load_classifier(&mut bpf, "flowcone_frag_target").map_err(
@@ -227,7 +224,39 @@ impl DataPlane {
         let ingress_target = load_target_map(&mut bpf, "INGRESS_TARGET", "flowcone_tcx_ingress")?;
         let egress_target = load_target_map(&mut bpf, "EGRESS_TARGET", "flowcone_tcx_egress")?;
         let frag_target = load_target_map(&mut bpf, "FRAG_TARGET", "flowcone_frag_target")?;
-        let frag6_target = load_target_map(&mut bpf, "FRAG6_TARGET", "flowcone_frag_v6")?;
+        let mut frag6_target = ProgramArray::try_from(
+            bpf.take_map("FRAG6_TARGET")
+                .ok_or("map FRAG6_TARGET not found")?,
+        )?;
+        let prog_frag6_in: &SchedClassifier = bpf
+            .program("flowcone_frag_v6_ingress")
+            .ok_or("program flowcone_frag_v6_ingress not found")?
+            .try_into()?;
+        let fd_frag6_in = prog_frag6_in
+            .fd()
+            .map_err(|e| -> Box<dyn std::error::Error> {
+                format!("flowcone_frag_v6_ingress fd: {e}").into()
+            })?;
+        frag6_target
+            .set(0, fd_frag6_in, 0)
+            .map_err(|e| -> Box<dyn std::error::Error> {
+                format!("FRAG6_TARGET set ingress: {e}").into()
+            })?;
+
+        let prog_frag6_out: &SchedClassifier = bpf
+            .program("flowcone_frag_v6_egress")
+            .ok_or("program flowcone_frag_v6_egress not found")?
+            .try_into()?;
+        let fd_frag6_out = prog_frag6_out
+            .fd()
+            .map_err(|e| -> Box<dyn std::error::Error> {
+                format!("flowcone_frag_v6_egress fd: {e}").into()
+            })?;
+        frag6_target
+            .set(1, fd_frag6_out, 0)
+            .map_err(|e| -> Box<dyn std::error::Error> {
+                format!("FRAG6_TARGET set egress: {e}").into()
+            })?;
         let icmp_target = load_target_map(&mut bpf, "ICMP_TARGET", "flowcone_icmp_target")?;
         let icmp6_target = load_target_map(&mut bpf, "ICMP6_TARGET", "flowcone_icmp6_target")?;
         let mut data_plane = Self {
@@ -253,7 +282,7 @@ impl DataPlane {
         Ok(data_plane)
     }
 
-    /// (Re-)attach the active dispatcher pair without loading them again.
+    /// Attaches the active dispatcher pair.
     pub(crate) fn attach(
         &mut self,
         force_new: bool,
@@ -284,9 +313,7 @@ impl DataPlane {
         Ok(())
     }
 
-    /// Attach the inactive dispatcher pair at the tail, then remove the old
-    /// pair. Both dispatchers tail-call the same idempotent target, so the
-    /// overlap is safe and there is no WAN gap.
+    /// Rotates active and standby dispatchers to reclaim tail position.
     fn rotate(&mut self, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
         let new = 1 - self.active;
         let (new_in_name, new_out_name) = if new == 0 {
@@ -365,5 +392,22 @@ impl DataPlane {
         }
         self.rotate(verbose)?;
         Ok(true)
+    }
+
+    /// Explicitly detaches active ingress and egress classifiers, restoring default network state.
+    pub(crate) fn detach(&mut self) {
+        let (in_name, out_name) = self.disp_names();
+        if let Some(id) = self.ingress.take() {
+            detach_classifier(&mut self.bpf, in_name, id);
+        }
+        if let Some(id) = self.egress.take() {
+            detach_classifier(&mut self.bpf, out_name, id);
+        }
+    }
+}
+
+impl Drop for DataPlane {
+    fn drop(&mut self) {
+        self.detach();
     }
 }

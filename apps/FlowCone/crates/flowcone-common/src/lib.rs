@@ -11,6 +11,9 @@ pub struct EndpointKey4 {
 #[cfg(not(target_arch = "bpf"))]
 unsafe impl aya::Pod for EndpointKey4 {}
 
+pub const BINDING_FLAG_SHORT_LIVED: u16 = 1;
+pub const DEFAULT_SHORT_LIVED_TIMEOUT_SEC: u32 = 5;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BindingValue4 {
@@ -18,6 +21,13 @@ pub struct BindingValue4 {
     pub port: u16,
     pub _pad: u16,
     pub last_seen: u32,
+}
+
+impl BindingValue4 {
+    #[inline(always)]
+    pub fn is_short_lived(&self) -> bool {
+        self._pad & BINDING_FLAG_SHORT_LIVED != 0
+    }
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -43,10 +53,18 @@ pub struct BindingValue6 {
     pub last_seen: u32,
 }
 
+impl BindingValue6 {
+    #[inline(always)]
+    pub fn is_short_lived(&self) -> bool {
+        self._pad[0] & BINDING_FLAG_SHORT_LIVED != 0
+    }
+}
+
 #[cfg(not(target_arch = "bpf"))]
 unsafe impl aya::Pod for BindingValue6 {}
 
-/// One new session notification consumed by the user-space expiry scheduler.
+/// Session creation notification event.
+/// `key.port` is in network byte order; `port` is allocated in host byte order.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SessionEvent4 {
@@ -55,9 +73,28 @@ pub struct SessionEvent4 {
     pub _pad: u16,
 }
 
+impl SessionEvent4 {
+    #[inline(always)]
+    pub fn is_short_lived(&self) -> bool {
+        self._pad & BINDING_FLAG_SHORT_LIVED != 0
+    }
+
+    #[inline(always)]
+    pub fn internal_port_host(&self) -> u16 {
+        u16::from_be(self.key.port)
+    }
+
+    #[inline(always)]
+    pub fn external_port_host(&self) -> u16 {
+        self.port
+    }
+}
+
 #[cfg(not(target_arch = "bpf"))]
 unsafe impl aya::Pod for SessionEvent4 {}
 
+/// Session creation notification event for IPv6.
+/// `key.port` is in network byte order; `port` is allocated in host byte order.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SessionEvent6 {
@@ -66,10 +103,27 @@ pub struct SessionEvent6 {
     pub _pad: [u16; 3],
 }
 
+impl SessionEvent6 {
+    #[inline(always)]
+    pub fn is_short_lived(&self) -> bool {
+        self._pad[0] & BINDING_FLAG_SHORT_LIVED != 0
+    }
+
+    #[inline(always)]
+    pub fn internal_port_host(&self) -> u16 {
+        u16::from_be(self.key.port)
+    }
+
+    #[inline(always)]
+    pub fn external_port_host(&self) -> u16 {
+        self.port
+    }
+}
+
 #[cfg(not(target_arch = "bpf"))]
 unsafe impl aya::Pod for SessionEvent6 {}
 
-/// Fragment cache key. id is kept in packet byte order; it is only a key.
+/// IPv4 fragment cache key.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FragKey4 {
@@ -140,22 +194,7 @@ pub struct GlobalConfig {
 #[cfg(not(target_arch = "bpf"))]
 unsafe impl aya::Pod for GlobalConfig {}
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ConfigStore {
-    pub active: u32,
-    pub slots: [GlobalConfig; 2],
-}
-
-#[cfg(not(target_arch = "bpf"))]
-unsafe impl aya::Pod for ConfigStore {}
-
-/// Non-routable IPv4 source ranges, as CIDR strings.
-///
-/// Must match is_private_ipv4(): the nftables srcnat exemption set is
-/// generated from this list, so the eBPF SNAT gate and the firewall can never
-/// drift apart. A range that is exempted from masquerade but not SNATed by the
-/// eBPF program would leak the private source address.
+/// Non-routable IPv4 source ranges matching `is_private_ipv4()` (RFC 6890).
 #[cfg(not(target_arch = "bpf"))]
 pub const INTERNAL_V4_PREFIXES: &[&str] = &[
     "0.0.0.0/8",
@@ -175,30 +214,31 @@ pub const INTERNAL_V4_PREFIXES: &[&str] = &[
     "240.0.0.0/4",
 ];
 
-/// Check if an IPv4 source must not leave the WAN untranslated.
-///
-/// Covers the private/CGNAT subnets and the IANA special-purpose ranges
-/// (RFC 6890). Expects the ip in raw packet byte representation.
+/// Checks if an IPv4 source address belongs to private, CGNAT, or special-purpose ranges (RFC 6890).
+/// Expects `raw_ip` loaded from wire octets in native memory order [b0, b1, b2, b3].
 #[inline(always)]
 pub fn is_private_ipv4(raw_ip: u32) -> bool {
-    let b = raw_ip.to_ne_bytes();
+    is_private_ipv4_octets(raw_ip.to_ne_bytes())
+}
+
+#[inline(always)]
+pub fn is_private_ipv4_octets(b: [u8; 4]) -> bool {
+    if (b[0] == 192 && b[1] == 168) || b[0] == 10 || (b[0] == 172 && (16..=31).contains(&b[1])) {
+        return true;
+    }
 
     match b[0] {
-        // 0.0.0.0/8 ("this network"), 10.0.0.0/8, 127.0.0.0/8 (loopback)
-        0 | 10 | 127 => true,
+        // 0.0.0.0/8 ("this network"), 127.0.0.0/8 (loopback)
+        0 | 127 => true,
         // 100.64.0.0/10 (CGNAT, RFC 6598)
         100 => (64..=127).contains(&b[1]),
         // 169.254.0.0/16 (link-local)
         169 => b[1] == 254,
-        // 172.16.0.0/12
-        172 => (16..=31).contains(&b[1]),
         192 => match b[1] {
             // 192.0.0.0/24 (IETF protocol assignments), 192.0.2.0/24 (TEST-NET-1)
             0 => b[2] == 0 || b[2] == 2,
             // 192.88.99.0/24 (deprecated 6to4 relay anycast)
             88 => b[2] == 99,
-            // 192.168.0.0/16
-            168 => true,
             _ => false,
         },
         // 198.18.0.0/15 (benchmarking), 198.51.100.0/24 (TEST-NET-2)
@@ -217,13 +257,7 @@ pub fn is_ula_ipv6(addr: &[u8; 16]) -> bool {
     (addr[0] & 0xfe) == 0xfc
 }
 
-/// Check if IPv6 address is a valid routable internal unicast address.
-///
-/// In ULA-only mode (`allow_all_internal = false`), only ULA `fc00::/7` is allowed.
-/// In full NAT66 mode (`allow_all_internal = true`), Global Unicast `2000::/3`
-/// is also accepted. This aligns exactly with the firewall liveness exemption
-/// sets (`{2000::/3, fc00::/7}`), avoiding Double NAT while excluding multicast
-/// (`ff00::/8`), link-local (`fe80::/10`), loopback (`::1`), and unspecified (`::`).
+/// Checks if an IPv6 address is a routable internal unicast source (ULA fc00::/7, or GUA 2000::/3 if enabled).
 #[inline(always)]
 pub fn is_routable_internal_ipv6(addr: &[u8; 16], allow_all_internal: bool) -> bool {
     if is_ula_ipv6(addr) {
@@ -237,39 +271,27 @@ pub fn is_routable_internal_ipv6(addr: &[u8; 16], allow_all_internal: bool) -> b
 }
 
 pub const MAX_BINDINGS: u32 = 65536;
-/// Per-direction, per-family fragment cache capacity. Keep this the single
-/// source of truth for the eBPF LRU maps.
 pub const FRAG_MAP_ENTRIES: u32 = 1024;
-/// Capacity in bytes for the session event ring buffers.
-/// Must be a power of 2 and a multiple of page size (4096).
-/// 262,144 bytes (256 KiB) holds ~10,000 session creation events.
-pub const SESSION_EVENT_RINGBUF_BYTES: u32 = 262144;
-/// One byte of state per port; 65536 entries cover the full u16 port space.
+pub const SESSION_EVENT_RINGBUF_BYTES: u32 = 4194304;
 pub const PORT_STATE_ENTRIES: u32 = 65536;
-/// Each parity queue can hold the whole pool; duplicates are skipped via the
-/// per-port state, and a full queue sets a user-space rebuild flag.
 pub const PORT_QUEUE_ENTRIES: u32 = 65536;
 
 pub const PORT_FREE_BIT: u8 = 1;
 pub const PORT_QUEUED_BIT: u8 = 2;
 
-/// Port popped from queue. Clears `PORT_QUEUED_BIT`.
+/// Clears `PORT_QUEUED_BIT`.
 #[inline(always)]
 pub fn port_state_on_unqueue(state: u8) -> u8 {
     state & !PORT_QUEUED_BIT
 }
 
-/// Port bound to an active session. Clears `PORT_FREE_BIT`.
+/// Clears `PORT_FREE_BIT`.
 #[inline(always)]
 pub fn port_state_on_bound(state: u8) -> u8 {
     state & !PORT_FREE_BIT
 }
 
-/// Evaluate whether a released port needs to be pushed back to queue.
-/// Returns `(needs_queue_push, new_state)`.
-///
-/// If `PORT_QUEUED_BIT` is already set (e.g. redundant release or port preservation
-/// left a stale queue entry), no duplicate queue push is needed.
+/// Evaluates state on port release; returns `(needs_queue_push, new_state)`.
 #[inline(always)]
 pub fn port_state_on_release(state: u8) -> (bool, u8) {
     let next = state | PORT_FREE_BIT;
@@ -280,9 +302,201 @@ pub fn port_state_on_release(state: u8) -> (bool, u8) {
     }
 }
 
-/// Packet mark set on DNAT-translated inbound packets. The daemon can override
-/// this through GlobalConfig to avoid colliding with proxy/policy marks.
-pub const DEFAULT_FLOWCONE_MARK: u32 = 0x40000000;
+/// Default packet mark applied to inbound DNAT-translated packets.
+pub const DEFAULT_FLOWCONE_MARK: u32 = 0x04787000;
+
+pub const IPPROTO_ICMP: u8 = 1;
+pub const IPPROTO_UDP: u8 = 17;
+pub const IPPROTO_HOPOPTS: u8 = 0;
+pub const IPPROTO_ROUTING: u8 = 43;
+pub const IPPROTO_FRAGMENT: u8 = 44;
+pub const IPPROTO_DSTOPTS: u8 = 60;
+pub const IPPROTO_ICMPV6: u8 = 58;
+
+pub const ETH_P_IP: u16 = 0x0800;
+pub const ETH_P_IPV6: u16 = 0x86dd;
+pub const ETH_P_8021Q: u16 = 0x8100;
+pub const ETH_P_8021AD: u16 = 0x88a8;
+pub const ETH_P_PPPOE: u16 = 0x8864;
+pub const PPP_IPV4: u16 = 0x0021;
+pub const PPP_IPV6: u16 = 0x0057;
+
+/// RFC 1624 incremental 16-bit one's complement checksum update.
+#[inline(always)]
+pub fn csum_replace(csum: u16, old: u16, new: u16) -> u16 {
+    let mut sum = (!csum as u32) + (!old as u32) + new as u32;
+    let mut i = 0;
+    while i < 3 {
+        sum = (sum & 0xffff) + (sum >> 16);
+        i += 1;
+    }
+    !(sum as u16)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct L2Info {
+    pub proto: u16,
+    pub ip_off: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ipv6L4 {
+    Udp(usize),
+    Fragment,
+    NonUdp,
+    Unsupported,
+}
+
+#[inline(always)]
+pub fn parse_ppp_slice(data: &[u8], mut off: usize) -> Option<L2Info> {
+    if off + 2 > data.len() {
+        return None;
+    }
+    if data[off] == 0xff && off + 2 <= data.len() && data[off + 1] == 0x03 {
+        off += 2;
+    }
+    if off + 2 > data.len() {
+        return None;
+    }
+    let b0 = data[off];
+    if (b0 & 1) != 0 {
+        let proto = match b0 as u16 {
+            0x21 => ETH_P_IP,
+            0x57 => ETH_P_IPV6,
+            _ => return None,
+        };
+        return Some(L2Info {
+            proto,
+            ip_off: off + 1,
+        });
+    }
+    if off + 2 > data.len() {
+        return None;
+    }
+    let raw = u16::from_be_bytes([data[off], data[off + 1]]);
+    let proto = match raw {
+        PPP_IPV4 => ETH_P_IP,
+        PPP_IPV6 => ETH_P_IPV6,
+        _ => return None,
+    };
+    Some(L2Info {
+        proto,
+        ip_off: off + 2,
+    })
+}
+
+#[inline(always)]
+pub fn parse_l2_slice(data: &[u8], l2_len: u32) -> Option<L2Info> {
+    if l2_len == 14 {
+        if data.len() < 14 {
+            return None;
+        }
+        let mut proto = u16::from_be_bytes([data[12], data[13]]);
+        let mut ip_off = 14;
+        let mut tags = 0;
+        while (proto == ETH_P_8021Q || proto == ETH_P_8021AD) && tags < 2 {
+            if ip_off + 4 > data.len() {
+                return None;
+            }
+            proto = u16::from_be_bytes([data[ip_off + 2], data[ip_off + 3]]);
+            ip_off += 4;
+            tags += 1;
+        }
+        if proto == ETH_P_PPPOE {
+            if ip_off + 6 > data.len() {
+                return None;
+            }
+            return parse_ppp_slice(data, ip_off + 6);
+        }
+        if proto == ETH_P_IP || proto == ETH_P_IPV6 {
+            return Some(L2Info { proto, ip_off });
+        }
+        return None;
+    }
+
+    if data.len() < 2 {
+        return None;
+    }
+    let ver = data[0] >> 4;
+    let proto = match ver {
+        4 => ETH_P_IP,
+        6 => ETH_P_IPV6,
+        _ => return None,
+    };
+    Some(L2Info { proto, ip_off: 0 })
+}
+
+#[inline(always)]
+pub fn locate_ipv6_l4_slice(data: &[u8], ip_off: usize, mut nh: u8) -> Ipv6L4 {
+    let mut cur_off = ip_off + 40;
+    let mut iter = 0;
+    while iter < 4 {
+        if nh == IPPROTO_UDP {
+            return Ipv6L4::Udp(cur_off);
+        }
+        if nh == IPPROTO_HOPOPTS || nh == IPPROTO_DSTOPTS {
+            if cur_off + 2 > data.len() {
+                return Ipv6L4::NonUdp;
+            }
+            let next = data[cur_off];
+            let ext_len = (data[cur_off + 1] as usize + 1) * 8;
+            if cur_off + ext_len > data.len() {
+                return Ipv6L4::NonUdp;
+            }
+            nh = next;
+            cur_off += ext_len;
+        } else if nh == IPPROTO_ROUTING {
+            return Ipv6L4::Unsupported;
+        } else if nh == IPPROTO_FRAGMENT {
+            return Ipv6L4::Fragment;
+        } else {
+            return Ipv6L4::NonUdp;
+        }
+        iter += 1;
+    }
+
+    if nh == IPPROTO_UDP {
+        Ipv6L4::Udp(cur_off)
+    } else {
+        Ipv6L4::Unsupported
+    }
+}
+
+#[inline(always)]
+pub fn ipv6_fragment_offset_slice(data: &[u8], ip_off: usize, mut nh: u8) -> Option<usize> {
+    if nh == IPPROTO_FRAGMENT {
+        let cur = ip_off + 40;
+        if cur + 8 <= data.len() {
+            return Some(cur);
+        }
+        return None;
+    }
+    let mut cur = ip_off + 40;
+    let mut iter = 0;
+    while iter < 4 {
+        if nh == IPPROTO_FRAGMENT {
+            if cur + 8 <= data.len() {
+                return Some(cur);
+            }
+            return None;
+        }
+        if nh != IPPROTO_HOPOPTS && nh != IPPROTO_DSTOPTS {
+            return None;
+        }
+        if cur + 2 > data.len() {
+            return None;
+        }
+        let next = data[cur];
+        let len = (data[cur + 1] as usize + 1) * 8;
+        if cur + len > data.len() {
+            return None;
+        }
+        nh = next;
+        cur += len;
+        iter += 1;
+    }
+    None
+}
 
 #[cfg(test)]
 mod tests {
@@ -461,50 +675,107 @@ mod tests {
     fn test_global_config_layout() {
         assert_eq!(core::mem::size_of::<GlobalConfig>(), 56);
         assert_eq!(core::mem::align_of::<GlobalConfig>(), 4);
-        assert_eq!(core::mem::size_of::<ConfigStore>(), 116);
-        assert_eq!(core::mem::align_of::<ConfigStore>(), 4);
     }
 
     #[test]
     fn test_port_lifecycle_state_machine() {
-        // Initial state after pool rebuild: both FREE and QUEUED bits set.
         let initial = PORT_FREE_BIT | PORT_QUEUED_BIT;
         assert_eq!(initial, 0x03);
 
-        // 1. Normal allocation flow:
-        // Pop from queue -> unqueue clears QUEUED_BIT.
         let unqueued = port_state_on_unqueue(initial);
-        assert_eq!(unqueued, PORT_FREE_BIT); // 0x01: free but unqueued
+        assert_eq!(unqueued, PORT_FREE_BIT);
 
-        // Claim port -> bound clears FREE_BIT.
         let bound = port_state_on_bound(unqueued);
-        assert_eq!(bound, 0); // 0x00: fully bound to active session
+        assert_eq!(bound, 0);
 
-        // Session expires -> release:
         let (needs_push, released) = port_state_on_release(bound);
         assert!(needs_push);
-        assert_eq!(released, PORT_FREE_BIT | PORT_QUEUED_BIT); // 0x03: ready in queue
+        assert_eq!(released, PORT_FREE_BIT | PORT_QUEUED_BIT);
 
-        // 2. Port preservation flow (direct claim without pop):
-        // Preferred port claimed directly while stale entry remains in queue.
+        // Port preservation flow: bound directly from initial state
         let preserved_bound = port_state_on_bound(initial);
-        assert_eq!(preserved_bound, PORT_QUEUED_BIT); // 0x02: bound, but QUEUED_BIT remains
+        assert_eq!(preserved_bound, PORT_QUEUED_BIT);
 
-        // When the stale queue entry is popped later:
         let stale_popped = port_state_on_unqueue(preserved_bound);
-        assert_eq!(stale_popped, 0); // Both bits clear
-        // Inbound claim will fail (port already in use). The pop handler checks:
-        // `stale_popped & PORT_FREE_BIT != 0` -> false! Entry is discarded without requeueing.
+        assert_eq!(stale_popped, 0);
 
-        // If release is called while stale QUEUED_BIT was still present:
         let (needs_push, refreshed) = port_state_on_release(preserved_bound);
-        assert!(!needs_push); // Stale entry already in queue, do not push duplicate!
+        assert!(!needs_push);
         assert_eq!(refreshed, PORT_FREE_BIT | PORT_QUEUED_BIT);
 
-        // 3. Duplicate release guard:
-        // Calling release on an already free/queued port does not push a duplicate entry.
+        // Duplicate release guard
         let (needs_push, dup_state) = port_state_on_release(PORT_FREE_BIT | PORT_QUEUED_BIT);
         assert!(!needs_push);
         assert_eq!(dup_state, PORT_FREE_BIT | PORT_QUEUED_BIT);
+    }
+
+    #[test]
+    fn test_rfc1624_csum_replace() {
+        // Identity: replacing with same value must yield same checksum
+        let original_csum: u16 = 0x55aa;
+        assert_eq!(csum_replace(original_csum, 0x1234, 0x1234), original_csum);
+
+        // Replacing zero with a value, then reversing it, must yield original checksum
+        let new_csum = csum_replace(original_csum, 0x0000, 0x5678);
+        assert_ne!(new_csum, original_csum);
+        let restored = csum_replace(new_csum, 0x5678, 0x0000);
+        assert_eq!(restored, original_csum);
+    }
+
+    #[test]
+    fn test_parse_l2_slice_ethernet_and_raw_ip() {
+        let raw_v4 = [0x45, 0x00, 0x00, 0x28];
+        let l2_raw4 = parse_l2_slice(&raw_v4, 0).expect("raw ipv4");
+        assert_eq!(l2_raw4.proto, ETH_P_IP);
+        assert_eq!(l2_raw4.ip_off, 0);
+
+        let raw_v6 = [0x60, 0x00, 0x00, 0x00];
+        let l2_raw6 = parse_l2_slice(&raw_v6, 0).expect("raw ipv6");
+        assert_eq!(l2_raw6.proto, ETH_P_IPV6);
+        assert_eq!(l2_raw6.ip_off, 0);
+
+        let mut eth_v4 = [0u8; 14 + 20];
+        eth_v4[12] = 0x08;
+        eth_v4[13] = 0x00;
+        let l2_eth4 = parse_l2_slice(&eth_v4, 14).expect("eth ipv4");
+        assert_eq!(l2_eth4.proto, ETH_P_IP);
+        assert_eq!(l2_eth4.ip_off, 14);
+
+        let mut vlan_v6 = [0u8; 18 + 40];
+        vlan_v6[12] = 0x81;
+        vlan_v6[13] = 0x00;
+        vlan_v6[14] = 0x00;
+        vlan_v6[15] = 100;
+        vlan_v6[16] = 0x86;
+        vlan_v6[17] = 0xdd;
+        let l2_vlan = parse_l2_slice(&vlan_v6, 14).expect("vlan ipv6");
+        assert_eq!(l2_vlan.proto, ETH_P_IPV6);
+        assert_eq!(l2_vlan.ip_off, 18);
+    }
+
+    #[test]
+    fn test_locate_ipv6_l4_slice() {
+        let mut pkt_udp = [0u8; 40 + 8];
+        pkt_udp[6] = IPPROTO_UDP;
+        let l4 = locate_ipv6_l4_slice(&pkt_udp, 0, IPPROTO_UDP);
+        match l4 {
+            Ipv6L4::Udp(off) => assert_eq!(off, 40),
+            _ => panic!("expected UDP at offset 40"),
+        }
+
+        let mut pkt_hbh = [0u8; 40 + 8 + 8];
+        pkt_hbh[40] = IPPROTO_UDP;
+        pkt_hbh[41] = 0;
+        let l4_hbh = locate_ipv6_l4_slice(&pkt_hbh, 0, IPPROTO_HOPOPTS);
+        match l4_hbh {
+            Ipv6L4::Udp(off) => assert_eq!(off, 48),
+            _ => panic!("expected UDP at offset 48 after HBH"),
+        }
+
+        let l4_frag = locate_ipv6_l4_slice(&pkt_hbh, 0, IPPROTO_FRAGMENT);
+        match l4_frag {
+            Ipv6L4::Fragment => {}
+            _ => panic!("expected Fragment"),
+        }
     }
 }
