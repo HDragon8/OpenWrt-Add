@@ -78,6 +78,27 @@ sync_passwall() {
 }
 
 # ------------------------------------------------------------------------------
+# slobys's AdZero
+# ------------------------------------------------------------------------------
+sync_AdZero() {
+    local target="legacy/AdZero"
+    log_info "正在同步: $target (AdZero插件)..."
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    if clone_repo "https://github.com/slobys/AdZero" "$tmp_dir/AdZero1"; then
+        cp -rf "$tmp_dir/AdZero1/luci-app-adzero" "$tmp_dir/AdZero/"
+        local makefile="$tmp_dir/AdZero/luci-app-adzero/Makefile"
+        sed -i 's/^LUCI_MINIFY_CSS:=.*/LUCI_NO_CSS_MINIFY:=1/' "$makefile"
+        deploy_dir "$tmp_dir/AdZero" "$REPO_ROOT/$target"
+        rm -rf "$tmp_dir"
+        return 0
+    fi
+    rm -rf "$tmp_dir"
+    return 1
+}
+
+# ------------------------------------------------------------------------------
 # openwrt_pkgs
 # ------------------------------------------------------------------------------
 sync_openwrt_pkgs() {
@@ -508,6 +529,7 @@ sync_imm_pkg() {
 run_all_custom_sync() {
     local -a handlers=(
         sync_passwall
+        sync_AdZero
         sync_openwrt_pkgs
         sync_openclash
         sync_autocore_arm
