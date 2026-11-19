@@ -1,3 +1,0 @@
-config adzero 'main'
-	option enabled '0'
-	option routing_enabled '0'

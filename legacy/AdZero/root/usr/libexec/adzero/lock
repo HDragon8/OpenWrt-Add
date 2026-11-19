@@ -1,3 +1,0 @@
-#!/bin/sh
-# Lock the shell's inherited descriptor; no extra package is required.
-exec ucode -S "$(dirname "$0")/lock.uc"
