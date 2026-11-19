@@ -87,7 +87,7 @@ sync_AdZero() {
     tmp_dir="$(mktemp -d)"
 
     if clone_repo "https://github.com/slobys/AdZero" "$tmp_dir/AdZero1"; then
-        cp -rf "$tmp_dir/AdZero1/luci-app-adzero" "$tmp_dir/AdZero/"
+        cp -rf "$tmp_dir/AdZero1/luci-app-adzero" "$tmp_dir/AdZero/luci-app-adzero/"
         local makefile="$tmp_dir/AdZero/luci-app-adzero/Makefile"
         sed -i 's/^LUCI_MINIFY_CSS:=.*/LUCI_NO_CSS_MINIFY:=1/' "$makefile"
         deploy_dir "$tmp_dir/AdZero" "$REPO_ROOT/$target"
