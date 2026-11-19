@@ -61,12 +61,12 @@ sync_passwall() {
 
     if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall-packages" "$tmp_dir/openwrt_passwall"; then
 
-        if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall" "$tmp_dir/passwall"; then
-            cp -rf "$tmp_dir/passwall/luci-app-passwall" "$tmp_dir/openwrt_passwall/"
+        if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall" "$tmp_dir/passwall1"; then
+            cp -rf "$tmp_dir/passwall1/luci-app-passwall" "$tmp_dir/openwrt_passwall/"
         fi
 
         if clone_repo "https://github.com/Openwrt-Passwall/openwrt-passwall2" "$tmp_dir/passwall2"; then
-            cp -rf "$tmp_dir/passwall/luci-app-passwall2" "$tmp_dir/openwrt_passwall/"
+            cp -rf "$tmp_dir/passwall2/luci-app-passwall2" "$tmp_dir/openwrt_passwall/"
         fi
 
         deploy_dir "$tmp_dir/openwrt_passwall" "$REPO_ROOT/$target"
@@ -87,7 +87,7 @@ sync_AdZero() {
     tmp_dir="$(mktemp -d)"
 
     if clone_repo "https://github.com/slobys/AdZero" "$tmp_dir/AdZero1"; then
-        cp -rf "$tmp_dir/AdZero1/luci-app-adzero" "$tmp_dir/AdZero/luci-app-adzero/"
+        cp -rf "$tmp_dir/AdZero1/luci-app-adzero" "$tmp_dir/AdZero/"
         local makefile="$tmp_dir/AdZero/luci-app-adzero/Makefile"
         sed -i 's/^LUCI_MINIFY_CSS:=.*/LUCI_NO_CSS_MINIFY:=1/' "$makefile"
         deploy_dir "$tmp_dir/AdZero" "$REPO_ROOT/$target"
