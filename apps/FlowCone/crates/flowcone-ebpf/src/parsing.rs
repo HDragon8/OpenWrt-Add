@@ -133,6 +133,18 @@ pub fn is_link_local_v4(raw_ip: u32) -> bool {
 
 pub const DHCP_SERVER_PORT_BE: u16 = 67u16.to_be();
 pub const DHCP_CLIENT_PORT_BE: u16 = 68u16.to_be();
+pub const DHCPV6_CLIENT_PORT_BE: u16 = 546u16.to_be();
+pub const DHCPV6_SERVER_PORT_BE: u16 = 547u16.to_be();
+
+#[inline(always)]
+pub fn is_multicast_v6(addr: &[u8; 16]) -> bool {
+    addr[0] == 0xff
+}
+
+#[inline(always)]
+pub fn is_link_local_v6(addr: &[u8; 16]) -> bool {
+    addr[0] == 0xfe && (addr[1] & 0xc0) == 0x80
+}
 
 /// Fast-path filter for DHCP, link-local, and broadcast traffic.
 #[inline(always)]
@@ -144,6 +156,16 @@ pub fn bypass_special_udp4(src: u32, dst: u32, sport: u16, dport: u16) -> bool {
         || dport == DHCP_CLIENT_PORT_BE
         || is_multicast_or_broadcast_v4(dst)
         || is_link_local_v4(dst)
+}
+
+#[inline(always)]
+pub fn bypass_special_udp6(dst: &[u8; 16], sport: u16, dport: u16) -> bool {
+    sport == DHCPV6_CLIENT_PORT_BE
+        || sport == DHCPV6_SERVER_PORT_BE
+        || dport == DHCPV6_CLIENT_PORT_BE
+        || dport == DHCPV6_SERVER_PORT_BE
+        || is_multicast_v6(dst)
+        || is_link_local_v6(dst)
 }
 
 /// Parse the PPP protocol field (optional 0xff 0x03 address/control, optional
@@ -244,7 +266,7 @@ pub fn locate_ipv6_l4(data_end: usize, ip_off: usize, mut nh: u8) -> Ipv6L4 {
         if nh == IPPROTO_UDP {
             return Ipv6L4::Udp(cur_off);
         }
-        if nh == IPPROTO_HOPOPTS || nh == IPPROTO_DSTOPTS {
+        if nh == IPPROTO_HOPOPTS || nh == IPPROTO_DSTOPTS || nh == IPPROTO_ROUTING {
             if cur_off + 2 > data_end {
                 return Ipv6L4::NonUdp;
             }
@@ -255,8 +277,6 @@ pub fn locate_ipv6_l4(data_end: usize, ip_off: usize, mut nh: u8) -> Ipv6L4 {
             }
             nh = next;
             cur_off += ext_len;
-        } else if nh == IPPROTO_ROUTING {
-            return Ipv6L4::Unsupported;
         } else if nh == IPPROTO_FRAGMENT {
             return Ipv6L4::Fragment;
         } else {
@@ -291,7 +311,7 @@ pub fn ipv6_fragment_offset(data_end: usize, ip_off: usize, mut nh: u8) -> Optio
             }
             return None;
         }
-        if nh != IPPROTO_HOPOPTS && nh != IPPROTO_DSTOPTS {
+        if nh != IPPROTO_HOPOPTS && nh != IPPROTO_DSTOPTS && nh != IPPROTO_ROUTING {
             return None;
         }
         if cur + 2 > data_end {
