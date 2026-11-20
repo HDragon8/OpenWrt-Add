@@ -31,13 +31,13 @@ sed -i 's,https\?://downloads.openwrt.org,https://mirrors.cernet.edu.cn/openwrt,
 [ -f /usr/libexec/package-manager-call ] && sed -i 's/action="add"/action="add --allow-untrusted"/g' /usr/libexec/package-manager-call
 
 #uhttpd 设置
-uci set uhttpd.main.rfc1918_filter=0
-uci set uhttpd.main.redirect_https=0
-uci set uhttpd.main.http_keepalive=0
-uci set uhttpd.main.tcp_keepalive=0
-uci set uhttpd.main.script_timeout=65535
-uci set uhttpd.main.script_network_timeout=65535
-uci commit uhttpd
+#uci set uhttpd.main.rfc1918_filter=0
+#uci set uhttpd.main.redirect_https=0
+#uci set uhttpd.main.http_keepalive=0
+#uci set uhttpd.main.tcp_keepalive=0
+#uci set uhttpd.main.script_timeout=65535
+#uci set uhttpd.main.script_network_timeout=65535
+#uci commit uhttpd
 
 #防火墙设置
 #uci set firewall.@defaults[0].input='ACCEPT'
@@ -46,20 +46,20 @@ uci commit uhttpd
 #uci commit firewall
 
 #Packet Steering
-uci set network.globals.packet_steering='2'
-uci set network.globals.steering_flows='128'
-uci set network.lan.ip6assign='64'
-uci set network.lan.ip6ifaceid='eui64'
-uci delete network.globals.ula_prefix 2>/dev/null
-uci commit network
+#uci set network.globals.packet_steering='2'
+#uci set network.globals.steering_flows='128'
+#uci set network.lan.ip6assign='64'
+#uci set network.lan.ip6ifaceid='eui64'
+#uci delete network.globals.ula_prefix 2>/dev/null
+#uci commit network
 
 #通用即插即用
-uci set upnpd.config.enabled='1'
-uci del upnpd.config.force_forwarding 2>/dev/null
-uci set upnpd.config.ext_allow_private_ipv4='1'
-uci set upnpd.config.use_stun='1'
-uci set upnpd.config.stun_host='stun.miwifi.com'
-uci commit upnpd
+#uci set upnpd.config.enabled='1'
+#uci del upnpd.config.force_forwarding 2>/dev/null
+#uci set upnpd.config.ext_allow_private_ipv4='1'
+#uci set upnpd.config.use_stun='1'
+#uci set upnpd.config.stun_host='stun.miwifi.com'
+#uci commit upnpd
 
 #dnsmasq 设置以及开启 IPv6
 #uci del dhcp.lan.ra 2>/dev/null
