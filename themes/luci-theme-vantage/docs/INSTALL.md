@@ -812,6 +812,8 @@ Or name just one of them, and add any installed language packages
 - **Appearance:** a saved `/etc/config/vantage_theme` stays behind the same
   way; `rm /etc/config/vantage_theme` removes it (and
   `vantage_theme.apk-new` or `vantage_theme-opkg`, if an upgrade left one).
+  The login page's switch, `luci.main.vantage_https`, is removed with the
+  theme.
 - **Signing key and repository:** these stay, so your router keeps trusting
   the project's key and any package it signs. Unless you plan to reinstall,
   remove them, using the lines for your version:
@@ -1021,6 +1023,26 @@ Status → Channel Analysis is a stock LuCI page. Its scan takes each radio
 off its channel for a moment, so clients may notice a short hiccup while the
 page is open. The Vantage dashboard never scans.
 
+### The login page moves from http:// to https://
+
+Opened over plain HTTP, the login page looks whether the router's HTTPS
+port answers with a certificate the browser accepts, and moves there if
+it does, so that the password is not typed over plain HTTP where HTTPS
+works. LuCI's base login page, the one themes without their own use,
+does the same; Bootstrap's does not. It happens only where the browser
+trusts the certificate or has stored an exception for it, and it is not
+`uhttpd`'s `redirect_https`, which forces every request. To stay on HTTP
+all the same:
+
+```sh
+uci set luci.main.vantage_https='stay'
+uci commit luci
+```
+
+`uci delete luci.main.vantage_https` and `uci commit luci` bring the move
+back. The switch sits in LuCI's own config on purpose: a login that may
+only save Vantage's Appearance cannot set it.
+
 ### Get back to Bootstrap from SSH
 
 If the web interface is unusable, switch the theme without it:
@@ -1088,7 +1110,9 @@ Then reload the page. To remove Vantage entirely, see
   the dashboard simply shows no reverse-DNS names.
 - **The theme** adds nothing about the device to what logged-out visitors
   see (the login page, error pages) except the router's hostname as the
-  login page's heading, as LuCI's Bootstrap does. It loads nothing from the
+  login page's heading, as LuCI's Bootstrap does, and the HTTPS ports
+  that page may move to, as LuCI's base login page has them. It loads
+  nothing from the
   internet unless you click **Check for updates** under Appearance: then
   your browser reads the project's 24.10 package list on GitHub Pages,
   without cookies or a referrer (browsers still send the address you

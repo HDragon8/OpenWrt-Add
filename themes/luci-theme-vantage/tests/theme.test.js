@@ -513,8 +513,9 @@ test('Appearance: the templates and the login page read the same keys, in the sa
 	const table = /\nconst LOOK = (\{[\s\S]*?\n\});\n/.exec(src);
 	assert.ok(table, 'found LOOK');
 	const LOOK = new Function('THEME_KEY', 'LOGIN_KEY', 'BACKDROP_KEY', 'return ' + table[1])('vantage.theme', 'vantage.login', 'vantage.backdrop.v1');
-	assert.deepEqual(Object.keys(LOOK), [ 'theme', 'login', 'backdrop', 'power', 'unfocused', 'brand' ]);
+	assert.deepEqual(Object.keys(LOOK), [ 'theme', 'login', 'backdrop', 'power', 'unfocused', 'brand', 'units' ]);
 	assert.ok(header.includes("look('brand', [ 'none', 'hostname', 'model' ])"), 'the template keeps the same brand values');
+	assert.ok(header.includes("look('units', [ 'bits', 'bytes' ])"), 'the template keeps the same units values');
 	assert.ok(header.includes("look('theme', 'vantage.theme.own', 'vantage.theme', [ 'auto', 'light', 'dark' ])"));
 	assert.ok(header.includes("look('backdrop', 'vantage.backdrop.own', 'vantage.backdrop.v1', [ 'grid', 'stars', 'none' ])"));
 	assert.ok(header.includes("look('power', 'vantage.power.own', 'vantage.power', [ 'normal', 'low' ])"));
@@ -536,6 +537,17 @@ test('Appearance: the templates and the login page read the same keys, in the sa
 	assert.equal(src.split('this.applyUnfocused();').length, 3, 'applied when the page opens and when another tab picks');
 	assert.ok(src.includes("else if (name === 'unfocused') root.setAttribute('data-vt-look-unfocused', value);"), 'a saved pick becomes the page\'s');
 	assert.equal(src.split("'vt-unfocused': 'unfocused'").length, 2, 'a failed save can be tried again');
+	assert.equal(src.split("'vt-units': 'units'").length, 2, 'Speed units too');
+	/* Speed units: handed over like the others, and the dashboard hears a pick */
+	assert.ok(header.includes("look('units', 'vantage.units.own', 'vantage.units', [ 'bits', 'bytes' ])"), 'this browser\'s pick, before the first paint');
+	assert.ok(!/units/.test(login) && !/units/.test(loginJs), 'the login page has no use for it');
+	assert.equal(src.split('this.applyUnits();').length, 3, 'applied when the page opens and when another tab picks');
+	assert.ok(src.includes("else if (name === 'units') root.setAttribute('data-vt-look-units', value);"), 'a saved pick becomes the page\'s');
+	assert.ok(src.includes("'vt-units': this.unitsPref()"), 'the panel shows the pick in force');
+	assert.ok(src.includes("this.root.setAttribute('data-vt-units', v);\n\t\t\twindow.dispatchEvent(new CustomEvent(UNITS_EVENT));"), 'and tells the dashboard');
+	assert.ok(src.includes("const UNITS_EVENT = 'vantage:units';"));
+	assert.ok(src.indexOf('this.backdropGroup(),') < src.indexOf("this.appearGroup('vt-units'") && src.indexOf("this.appearGroup('vt-units'") < src.indexOf("this.appearGroup('vt-power'"),
+		'Speed units sits between the network path\'s background and Low-power router');
 	assert.ok(src.includes("'vt-unfocused': this.unfocusedPref()"), 'the panel shows the pick in force');
 	for (const [ name, k ] of Object.entries(LOOK)) {
 		assert.match(k.own, /^vantage\.[a-z]+\.own$/, name);
@@ -547,6 +559,7 @@ test('Appearance: the templates and the login page read the same keys, in the sa
 	assert.deepEqual(LOOK.power.ok, [ 'normal', 'low' ], 'Low-power router is off unless picked');
 	assert.deepEqual(LOOK.unfocused.ok, [ 'still', 'moving' ], 'nothing moves without the focus unless picked');
 	assert.deepEqual(LOOK.brand.ok, [ 'none', 'hostname', 'model' ], 'nothing next to the logo unless picked');
+	assert.deepEqual(LOOK.units.ok, [ 'bits', 'bytes' ], 'traffic reads in bits unless picked');
 	assert.ok(!login.includes('vt-look-brand'), 'the login page shows no device name');
 	/* saved in config vantage_theme, section appearance, and nowhere else */
 	assert.deepEqual([ ...src.matchAll(/callLook(?:Set|Commit|Revert)\(([^)]*?)[,)]/g) ].map(m => m[1]), [ "'vantage_theme'", "'vantage_theme'", "'vantage_theme'", "'vantage_theme'" ]);
@@ -1066,7 +1079,7 @@ test('daily update check: this browser\'s alone: never saved for every browser, 
 	/* it is not one of the looks: setLook, the router's attributes and the other-tab sync never see it */
 	const table = /\nconst LOOK = (\{[\s\S]*?\n\});\n/.exec(src);
 	const LOOK = new Function('THEME_KEY', 'LOGIN_KEY', 'BACKDROP_KEY', 'return ' + table[1])('vantage.theme', 'vantage.login', 'vantage.backdrop.v1');
-	assert.deepEqual(Object.keys(LOOK), [ 'theme', 'login', 'backdrop', 'power', 'unfocused', 'brand' ]);
+	assert.deepEqual(Object.keys(LOOK), [ 'theme', 'login', 'backdrop', 'power', 'unfocused', 'brand', 'units' ]);
 	assert.doesNotMatch(JSON.stringify(LOOK), /update/);
 	const setPref = src.slice(src.indexOf('\tsetUpdatePref(pref) {'), src.indexOf('\tupdateGroup() {'));
 	assert.doesNotMatch(setPref, /setLook|lookWrite|callLook|LOOK_SYNC/);
@@ -1304,7 +1317,7 @@ test('daily update check: setupTheme applies what is kept, and another tab\'s st
 	const proto = new Function('baseclass', 'ui', 'rpc', 'host', 'E', 'L', '_', 'document', 'window', 'localStorage', src)(
 		{ extend: x => x }, {}, { declare: () => () => Promise.resolve({}) }, {}, () => ({}), {}, t => t, document, window, localStorage);
 	const shell = Object.assign(Object.create(proto), { root: { getAttribute: () => null, setAttribute() {} } });
-	for (const k of [ 'applyTheme', 'applyBackdrop', 'applyPower', 'applyUnfocused', 'applyBrand' ]) shell[k] = () => {};
+	for (const k of [ 'applyTheme', 'applyBackdrop', 'applyPower', 'applyUnfocused', 'applyUnits', 'applyBrand' ]) shell[k] = () => {};
 	shell.setupTheme();
 	assert.ok(gear.hasAttribute('data-vt-update'), 'applied with the theme, at page load');
 	delete store['vantage.update.auto'];

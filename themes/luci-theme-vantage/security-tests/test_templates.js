@@ -100,6 +100,9 @@ function environment(o) {
 					return o.listen;
 				if (c === 'uhttpd' && s === 'main' && opt === 'listen_https')
 					return o.hostile ? [ '0.0.0.0:443', '[::]:8443', '0.0.0.0:0', '0.0.0.0:70000', HOSTILE, HOSTILE + ':1' ] : [ '0.0.0.0:443', '[::]:443' ];
+				/* the administrator's switch for the login page's move to HTTPS (#137) */
+				if (c === 'luci' && s === 'main' && opt === 'vantage_https')
+					return o.hostile ? HOSTILE : o.https ?? null;
 				/* Appearance saved for every browser (/etc/config/vantage_theme) */
 				if (c === 'vantage_theme' && s === 'appearance')
 					return o.hostile ? HOSTILE : (o.look || {})[opt] ?? null;
@@ -318,8 +321,8 @@ test('login: fuser is never echoed, hostile inputs change no markup, the hostnam
 	assert.match(evil.html, /<h1 class="vt-login-title">SECRET-HOSTNAME&#34;&#62;&#60;script&#62;/, 'a hostile hostname is encoded');
 	assert.match(renderLogin({ path: ADMIN, noHostname: true }).html, /<h1 class="vt-login-title">Authorization Required<\/h1>/, 'none: as before');
 	assert.deepEqual(evil.calls.ubus, [], 'login page called ubus');
-	assert.deepEqual(evil.calls.uci, [ 'uhttpd.main.listen_https', 'vantage_theme.appearance.theme', 'vantage_theme.appearance.login', 'vantage_theme.appearance.power', 'vantage_theme.appearance.unfocused', 'system.@system.hostname' ],
-		'login page read more than the HTTPS ports, the Appearance saved for every browser and the hostname');
+	assert.deepEqual(evil.calls.uci, [ 'uhttpd.main.listen_https', 'luci.main.vantage_https', 'vantage_theme.appearance.theme', 'vantage_theme.appearance.login', 'vantage_theme.appearance.power', 'vantage_theme.appearance.unfocused', 'system.@system.hostname' ],
+		'login page read more than the HTTPS ports, the switch for the move to them, the Appearance saved for every browser and the hostname');
 	assert.match(evil.html, /role="alert">Invalid username and\/or password! Please try again\.</, 'generic error for a failed login');
 	assert.ok(!renderLogin({ path: ADMIN }).html.includes('role="alert"'), 'no error before a login attempt');
 	assert.deepEqual(inlineScripts(evil.html), inlineScripts(good.html), 'login inline scripts depend on input');
@@ -392,6 +395,13 @@ test('Appearance saved for every browser: only values the theme knows reach the 
 		assert.equal(unfocused(renderLogin({ path: ADMIN, look: { unfocused: odd } }).html), '', `login unfocused ${JSON.stringify(odd)}`);
 		assert.equal(unfocused(renderPage({ path: ADMIN, authed: true, look: { unfocused: odd } }).html), '', `header unfocused ${JSON.stringify(odd)}`);
 	}
+	/* Speed units: the dashboard's traffic in bits or bytes; the login page has no use for it */
+	const units = html => attrOf(html, 'html', 'data-vt-look-units');
+	assert.equal(units(renderPage({ path: ADMIN, authed: true, look: { units: 'bytes' } }).html), 'bytes');
+	assert.equal(units(renderPage({ path: ADMIN, look: { units: 'bytes' } }).html), '', 'not on a page without a login');
+	assert.equal(units(renderLogin({ path: ADMIN, look: { units: 'bytes' } }).html), undefined, 'the login page does not carry it');
+	for (const odd of [ HOSTILE, 'Bytes', ' bytes', 'octets', '' ])
+		assert.equal(units(renderPage({ path: ADMIN, authed: true, look: { units: odd } }).html), '', `header units ${JSON.stringify(odd)}`);
 	assert.deepEqual(looks(renderPage({ path: ADMIN, authed: true, look }).html),
 		{ 'data-vt-look-theme': 'dark', 'data-vt-look-login': 'stars', 'data-vt-look-backdrop': 'none', 'data-vt-look-brand': 'hostname' });
 	for (const odd of [ HOSTILE, 'Dark', ' dark', 'stars ', [ 'dark' ], {}, 1, '' ]) {
@@ -454,6 +464,21 @@ test('login form: post back without action, contract field names and autocomplet
 	assert.deepEqual(ports, [ 443, 8443, 1 ]);
 	assert.ok(ports.every(p => Number.isInteger(p) && p > 0 && p < 65536));
 	assert.equal(decode(attr(forms[0], 'data-https-probe')), '/luci-static/resources/icons/loading.svg');
+});
+
+test('login: luci.main.vantage_https \'stay\' hands the page no HTTPS port to move to; nothing else does (#137)', () => {
+	const ports = o => JSON.parse(decode(attrOf(renderLogin(Object.assign({ path: ADMIN }, o)).html, 'form', 'data-https-ports')));
+	assert.deepEqual(ports({}), [ 443 ], 'unset: the page may move, as before');
+	assert.deepEqual(ports({ https: 'stay' }), [], 'stay: no port, so the script has nowhere to go');
+	for (const https of [ 'Stay', ' stay', 'stay ', '1', 'off', 'switch', '', [ 'stay' ], { stay: 1 }, 0 ])
+		assert.deepEqual(ports({ https }), [ 443 ], `${JSON.stringify(https)} is not the switch`);
+	assert.deepEqual(ports({ hostile: true }), [ 443, 8443, 1 ], 'a hostile value neither');
+	/* the page is the same but for that list: the value itself is printed nowhere */
+	const strip = html => html.replace(/data-https-ports="[^"]*"/, '');
+	assert.equal(strip(renderLogin({ path: ADMIN, https: 'stay' }).html), strip(renderLogin({ path: ADMIN }).html));
+	/* and the switch is not in the config a login with the theme's group can write */
+	const acl = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'luci-theme-vantage/root/usr/share/rpcd/acl.d/luci-theme-vantage.json'), 'utf8'));
+	assert.deepEqual(acl['luci-theme-vantage'].write.uci, [ 'vantage_theme' ]);
 });
 
 test('login: odd uci and fuser values render without an exception and change no markup', () => {
