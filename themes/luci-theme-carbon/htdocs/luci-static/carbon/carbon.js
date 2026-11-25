@@ -69,6 +69,15 @@
 		({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 	const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+	const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
+	const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+	const canWaapi = () => typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function';
+	const splitTokens = (val) => {
+		if (Array.isArray(val)) return val.map((x) => String(x || '').trim()).filter(Boolean);
+		const s = String(val == null ? '' : val).trim();
+		if (!s || s === 'none') return [];
+		return s.split(/\s+/).filter(Boolean);
+	};
 
 	function h(tag, attrs, children) {
 		const el = document.createElement(tag);
@@ -192,7 +201,9 @@
 		'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
 		(ICONS[name] || ICONS.square) + '</svg>';
 
-	const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#4F5BEA"/><path d="M32 14.5l15.2 8.75v17.5L32 49.5l-15.2-8.75v-17.5z" fill="none" stroke="#fff" stroke-width="3.6" stroke-linejoin="round"/><circle cx="32" cy="32" r="5" fill="#fff"/></svg>';
+	const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="cb-logo-bg" x1="10" y1="2" x2="56" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#707EFF"/><stop offset="46%" stop-color="#4F5BEA"/><stop offset="100%" stop-color="#292FA8"/></linearGradient><radialGradient id="cb-logo-glow" cx="32" cy="24" r="30" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#B6C1FF" stop-opacity=".46"/><stop offset="55%" stop-color="#6B78FF" stop-opacity=".14"/><stop offset="100%" stop-color="#4F5BEA" stop-opacity="0"/></radialGradient><radialGradient id="cb-logo-bounce" cx="46" cy="62" r="26" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#6CE5FF" stop-opacity=".28"/><stop offset="100%" stop-color="#4F5BEA" stop-opacity="0"/></radialGradient><linearGradient id="cb-logo-rim" x1="16" y1="0" x2="48" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFF" stop-opacity=".58"/><stop offset="38%" stop-color="#FFF" stop-opacity=".1"/><stop offset="76%" stop-color="#9BA8FF" stop-opacity=".06"/><stop offset="100%" stop-color="#B8C8FF" stop-opacity=".3"/></linearGradient><linearGradient id="cb-logo-plate" x1="18" y1="14" x2="46" y2="50" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFF" stop-opacity=".32"/><stop offset="52%" stop-color="#DCE3FF" stop-opacity=".11"/><stop offset="100%" stop-color="#8998FF" stop-opacity=".06"/></linearGradient><linearGradient id="cb-logo-sheen" x1="16" y1="13" x2="40" y2="38" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFF" stop-opacity=".3"/><stop offset="100%" stop-color="#FFF" stop-opacity="0"/></linearGradient><linearGradient id="cb-logo-hex" x1="20" y1="13" x2="44" y2="51" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFF"/><stop offset="55%" stop-color="#EEF1FF"/><stop offset="100%" stop-color="#C7D1FF"/></linearGradient><radialGradient id="cb-logo-aura" cx="32" cy="32" r="10" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFF" stop-opacity=".34"/><stop offset="100%" stop-color="#FFF" stop-opacity="0"/></radialGradient><radialGradient id="cb-logo-core" cx="30" cy="29.8" r="7" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFF"/><stop offset="65%" stop-color="#EFF2FF"/><stop offset="100%" stop-color="#BAC6FF"/></radialGradient><clipPath id="cb-logo-sq"><rect width="64" height="64" rx="16"/></clipPath><clipPath id="cb-logo-hc"><path d="M29.75 14.8Q32 13.5 34.25 14.8l11.52 6.65q2.25 1.3 2.25 3.9v13.3q0 2.6-2.25 3.9L34.25 49.2q-2.25 1.3-4.5 0l-11.52-6.65q-2.25-1.3-2.25-3.9v-13.3q0-2.6 2.25-3.9z"/></clipPath></defs><g clip-path="url(#cb-logo-sq)"><rect width="64" height="64" fill="url(#cb-logo-bg)"/><ellipse cx="26" cy="10" rx="34" ry="22" fill="url(#cb-logo-glow)"/><rect width="64" height="64" fill="url(#cb-logo-bounce)"/><ellipse cx="32" cy="-2" rx="34" ry="15" fill="#FFF" fill-opacity=".11"/></g><rect x=".75" y=".75" width="62.5" height="62.5" rx="15.25" fill="none" stroke="url(#cb-logo-rim)" stroke-width="1.5"/><path d="M29.75 16.9Q32 15.6 34.25 16.9l11.52 6.65q2.25 1.3 2.25 3.9v13.3q0 2.6-2.25 3.9L34.25 51.3q-2.25 1.3-4.5 0l-11.52-6.65q-2.25-1.3-2.25-3.9v-13.3q0-2.6 2.25-3.9z" fill="#171C7A" fill-opacity=".26" stroke="#171C7A" stroke-opacity=".34" stroke-width="4.2"/><path d="M29.75 14.8Q32 13.5 34.25 14.8l11.52 6.65q2.25 1.3 2.25 3.9v13.3q0 2.6-2.25 3.9L34.25 49.2q-2.25 1.3-4.5 0l-11.52-6.65q-2.25-1.3-2.25-3.9v-13.3q0-2.6 2.25-3.9z" fill="url(#cb-logo-plate)"/><path d="M12 12h40L12 40z" fill="url(#cb-logo-sheen)" clip-path="url(#cb-logo-hc)"/><path d="M29.75 14.8Q32 13.5 34.25 14.8l11.52 6.65q2.25 1.3 2.25 3.9v13.3q0 2.6-2.25 3.9L34.25 49.2q-2.25 1.3-4.5 0l-11.52-6.65q-2.25-1.3-2.25-3.9v-13.3q0-2.6 2.25-3.9z" fill="none" stroke="url(#cb-logo-hex)" stroke-width="3.6" stroke-linejoin="round"/><circle cx="32" cy="32" r="10" fill="url(#cb-logo-aura)"/><circle cx="32" cy="33.3" r="5.3" fill="#1B2082" fill-opacity=".34"/><circle cx="32" cy="32" r="5.3" fill="url(#cb-logo-core)"/><circle cx="30.3" cy="30.2" r="1.4" fill="#FFF" fill-opacity=".95"/></svg>';
+	let logoSeq = 0;
+	const logo = C.logo = () => LOGO.replace(/\bcb-logo-/g, 'cb-h' + (++logoSeq) + '-');
 
 	const COLORS = {
 		blue: 'var(--cb-blue)', green: 'var(--cb-green)', orange: 'var(--cb-orange)', red: 'var(--cb-red)',
@@ -267,20 +278,20 @@
 		network: 'ports', wireless: 'wifi', dhcp: 'list', dns: 'server', hosts: 'tag', diagnostics: 'search',
 		firewall: 'shield', switch: 'ports', 'switch-vlan': 'layers', vlan: 'layers', pon: 'fiber',
 		gpon: 'fiber', xpon: 'fiber', sqm: 'sliders', qos: 'sliders', eqos: 'sliders', mwan3: 'route',
-		turboacc: 'zap', flowoffload: 'zap',
+		turboacc: 'zap', flowoffload: 'zap', flowcone: 'zap',
 		/* services */
 		ddns: 'refresh', upnp: 'link', wol: 'power', samba4: 'folder', samba: 'folder', ksmbd: 'folder',
 		nfs: 'folder', vsftpd: 'folder', adblock: 'shield', adguardhome: 'shield', smartdns: 'server',
 		mosdns: 'server', 'https-dns-proxy': 'server', acme: 'lock', users: 'users', openvpn: 'lock',
 		zerotier: 'lock', tailscale: 'lock', frpc: 'cloud', frps: 'cloud', nps: 'cloud', cloudflared: 'cloud',
 		openclash: 'send', passwall: 'send', passwall2: 'send', homeproxy: 'send', nikki: 'send',
-		'ssr-plus': 'send', shadowsocksr: 'send', vssr: 'send', bypass: 'send', aria2: 'download',
+		'ssr-plus': 'send', shadowsocksr: 'send', vssr: 'send', bypass: 'send', honk: 'send', aria2: 'download',
 		transmission: 'download', qbittorrent: 'download', minidlna: 'play', jellyfin: 'play',
 		rtp2httpd: 'fiber', rtp2httpx: 'fiber', udpxy: 'fiber', iptv: 'fiber',
 		watchcat: 'eye', diskman: 'disk', 'hd-idle': 'disk', dockerman: 'docker', docker: 'docker',
 		vlmcsd: 'key', ua2f: 'shield', accesscontrol: 'filter', timecontrol: 'clock', p910nd: 'printer',
 		usb_printer: 'printer', alist: 'folder', 'ddns-go': 'refresh', wechatpush: 'bell', serverchan: 'bell',
-		pushbot: 'bell'
+		pushbot: 'bell', irqbalance: 'cpu'
 	};
 	const PAGE_KEYWORDS = [
 		[/plugin|addon|extension/, 'puzzle'], [/theme|argon|design|kucat|skin/, 'palette'],
@@ -329,6 +340,131 @@
 			{ title: N_('Reboot'), icon: 'power', paths: ['system/reboot'] }
 		] }
 	];
+
+	/* ------------------------------------------------------------------
+	 * Customizable Simple menu model (pure helpers; UCI-backed on router,
+	 * localStorage fallback in static preview)
+	 * ------------------------------------------------------------------ */
+	const MENU_GROUPS = ['common', 'system'];
+	const MENU_MAX_ITEMS = 32;
+	const MENU_MAX_BYTES = 1024;
+	const MENU_PATH_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,63})?$/;
+	const SIMPLE_BUILTIN_BY_PATH = Object.create(null);
+	C.SIMPLE_MENU.forEach((grp, idx) => {
+		const groupKey = MENU_GROUPS[idx] || 'system';
+		grp.items.forEach((it) => {
+			const meta = { group: groupKey, title: it.title, icon: it.icon, paths: it.paths };
+			it.paths.forEach((p) => { SIMPLE_BUILTIN_BY_PATH[p] = meta; });
+		});
+	});
+
+	function isValidMenuPath(p) {
+		return typeof p === 'string' &&
+			p !== 'none' && p !== 'logout' && p.indexOf('logout/') !== 0 &&
+			p.indexOf('..') < 0 && MENU_PATH_RE.test(p);
+	}
+	function defaultSimpleMenu(known, root) {
+		const prefix = root ? root + '/' : '';
+		const out = { common: [], system: [] };
+		C.SIMPLE_MENU.forEach((grp, idx) => {
+			const key = MENU_GROUPS[idx] || 'system';
+			grp.items.forEach((it) => {
+				if (known) {
+					for (const p of it.paths) {
+						if (known[prefix + p]) { out[key].push(p); break; }
+					}
+				}
+				else {
+					out[key].push(it.paths[0]);
+				}
+			});
+		});
+		return out;
+	}
+	function resolveSimplePath(rel, known, root) {
+		if (!known || !isValidMenuPath(rel)) return null;
+		const prefix = root ? root + '/' : '';
+		const builtin = SIMPLE_BUILTIN_BY_PATH[rel] || null;
+		if (known[prefix + rel])
+			return { rel: rel, path: prefix + rel, node: known[prefix + rel], builtin: builtin };
+		if (builtin) {
+			for (const alt of builtin.paths) {
+				if (known[prefix + alt])
+					return { rel: alt, path: prefix + alt, node: known[prefix + alt], builtin: builtin };
+			}
+		}
+		return null;
+	}
+	const cloneSimpleMenu = (c) => ({
+		common: (c && Array.isArray(c.common)) ? c.common.slice() : [],
+		system: (c && Array.isArray(c.system)) ? c.system.slice() : []
+	});
+	function parseSimpleMenuObject(raw) {
+		const seen = Object.create(null);
+		const out = { common: [], system: [] };
+		let total = 0;
+		MENU_GROUPS.forEach((g) => {
+			let bytes = 0;
+			splitTokens(raw[g]).forEach((tok) => {
+				if (total >= MENU_MAX_ITEMS) return;
+				if (!isValidMenuPath(tok) || seen[tok]) return;
+				const nextBytes = (bytes ? bytes + 1 : 0) + tok.length;
+				if (nextBytes > MENU_MAX_BYTES) return;
+				seen[tok] = true;
+				out[g].push(tok);
+				bytes = nextBytes;
+				total++;
+			});
+		});
+		return total > 0 ? out : null;
+	}
+	function normalizeSimpleMenu(raw, fallback) {
+		const parsed = raw && typeof raw === 'object' ? parseSimpleMenuObject(raw) : null;
+		return parsed || cloneSimpleMenu(fallback || defaultSimpleMenu());
+	}
+	function serializeSimpleMenu(cfg) {
+		const c = normalizeSimpleMenu(cfg);
+		return {
+			common: c.common.length ? c.common.join(' ') : 'none',
+			system: c.system.length ? c.system.join(' ') : 'none'
+		};
+	}
+	function encodeSimpleMenuAttr(cfg) {
+		const s = serializeSimpleMenu(cfg);
+		return 'common=' + s.common + ';system=' + s.system;
+	}
+	function parseSimpleMenuAttr(str) {
+		const s = String(str || '').trim();
+		if (!s) return null;
+		const obj = {};
+		let any = false;
+		s.split(';').forEach((part) => {
+			const i = part.indexOf('=');
+			if (i <= 0) return;
+			const k = part.slice(0, i).trim(), v = part.slice(i + 1).trim();
+			if (k === 'common' || k === 'system') { obj[k] = v; any = true; }
+		});
+		return any ? parseSimpleMenuObject(obj) : null;
+	}
+	const countSimpleMenu = (cfg) => ((cfg && cfg.common && cfg.common.length) || 0) + ((cfg && cfg.system && cfg.system.length) || 0);
+	const isDefaultSimpleMenu = (cfg, known, root) => encodeSimpleMenuAttr(cfg) === encodeSimpleMenuAttr(defaultSimpleMenu(known, root));
+
+	C.simpleMenu = {
+		GROUPS: MENU_GROUPS,
+		MAX_ITEMS: MENU_MAX_ITEMS,
+		MAX_BYTES: MENU_MAX_BYTES,
+		isValidPath: isValidMenuPath,
+		builtinFor: (rel) => SIMPLE_BUILTIN_BY_PATH[rel] || null,
+		defaultConfig: defaultSimpleMenu,
+		resolvePath: resolveSimplePath,
+		clone: cloneSimpleMenu,
+		normalize: normalizeSimpleMenu,
+		serialize: serializeSimpleMenu,
+		encodeAttr: encodeSimpleMenuAttr,
+		parseAttr: parseSimpleMenuAttr,
+		count: countSimpleMenu,
+		isDefault: isDefaultSimpleMenu
+	};
 
 	/* ------------------------------------------------------------------
 	 * Appearance (auto / light / dark) — applied immediately on load
@@ -876,6 +1012,7 @@
 			if (!on && was && restoreFocus && burger) burger.focus();
 		};
 		const close = () => setDrawer(false, sidebar && sidebar.contains(document.activeElement));
+		C._closeNavDrawer = () => setDrawer(false, false);
 
 		if (burger) {
 			burger.setAttribute('aria-label', t('Menu'));
@@ -1006,8 +1143,43 @@
 	 *   url(path) → href
 	 * }
 	 * ------------------------------------------------------------------ */
+	let simpleMenuDrawer = null;
+
+	function buildKnownMap(model) {
+		const known = Object.create(null);
+		(model.categories || []).forEach((c) => {
+			const cIcon = CATEGORY_ICON[c.name] || pageIcon(c.name);
+			known[c.path] = Object.assign({ icon: cIcon, catTitle: '' }, c);
+			(c.children || []).forEach((ch) => {
+				known[ch.path] = Object.assign({ icon: pageIcon(ch.name, c.name), catTitle: c.title }, ch);
+			});
+		});
+		return known;
+	}
+
+	function savedSimpleMenu(model, known) {
+		const hasUci = typeof model.saveSimpleMenu === 'function';
+		const rawAttr = hasUci ? C._simpleMenuAttr : store.get('carbon.simpleMenu', '');
+		return C.simpleMenu.parseAttr(rawAttr) || C.simpleMenu.defaultConfig(known, model.root);
+	}
+
+	C.setSimpleMenuAttr = function (attr) {
+		C._simpleMenuAttr = String(attr || '');
+		if (C._navModel && C._navModel.simpleMenuAttr !== undefined)
+			C._navModel.simpleMenuAttr = C._simpleMenuAttr;
+		const app = document.querySelector('.cb-app');
+		if (app && app.dataset) {
+			if (C._simpleMenuAttr) app.dataset.simpleMenu = C._simpleMenuAttr;
+			else delete app.dataset.simpleMenu;
+		}
+		if (C._navModel) C.renderNav(C._navModel);
+	};
+
 	C.renderNav = function (model) {
+		const isNewModel = model !== C._navModel;
 		C._navModel = model;
+		if (isNewModel && model.simpleMenuAttr !== undefined)
+			C._simpleMenuAttr = model.simpleMenuAttr;
 		const nav = document.getElementById('topmenu');
 		if (!nav) return;
 		nav.innerHTML = '';
@@ -1015,11 +1187,7 @@
 
 		const active = model.activePath.join('/');
 		const isActive = (p) => active === p || active.indexOf(p + '/') === 0;
-		const known = {};
-		model.categories.forEach((c) => {
-			known[c.path] = c;
-			c.children.forEach((ch) => { known[ch.path] = ch; });
-		});
+		const known = buildKnownMap(model);
 
 		const link = (title, iconName, href, on) => {
 			const a = h('a', { class: 'cb-nav-link' + (on ? ' active' : ''), href: href, 'aria-current': on ? 'page' : null }, [
@@ -1030,19 +1198,41 @@
 			return a;
 		};
 
-		if (C.mode.get() === 'simple') {
-			C.SIMPLE_MENU.forEach((group) => {
+		if (C.mode.get() === 'simple' || (simpleMenuDrawer && !simpleMenuDrawer.closed)) {
+			const cfg = (simpleMenuDrawer && !simpleMenuDrawer.closed) ? simpleMenuDrawer.draft : savedSimpleMenu(model, known);
+			const groups = [
+				{ key: 'common', label: C.SIMPLE_MENU[0].group },
+				{ key: 'system', label: C.SIMPLE_MENU[1].group }
+			];
+			const seenFull = Object.create(null);
+			let renderedCount = 0;
+			groups.forEach((g) => {
 				const items = [];
-				group.items.forEach((it) => {
-					for (const p of it.paths) {
-						const full = model.root + '/' + p;
-						if (known[full]) { items.push({ it: it, path: full }); break; }
-					}
+				(cfg[g.key] || []).forEach((rel) => {
+					const resolved = C.simpleMenu.resolvePath(rel, known, model.root);
+					if (!resolved || seenFull[resolved.path]) return;
+					seenFull[resolved.path] = true;
+					items.push({
+						title: resolved.builtin ? t(resolved.builtin.title) : resolved.node.title,
+						icon: resolved.builtin ? resolved.builtin.icon : resolved.node.icon,
+						path: resolved.path
+					});
 				});
 				if (!items.length) return;
-				nav.appendChild(h('div', { class: 'cb-nav-sect', text: t(group.group) }));
-				items.forEach((x) => nav.appendChild(link(t(x.it.title), x.it.icon, model.url(x.path), isActive(x.path))));
+				renderedCount += items.length;
+				nav.appendChild(h('div', { class: 'cb-nav-sect', text: t(g.label) }));
+				items.forEach((x) => nav.appendChild(link(x.title, x.icon, model.url(x.path), isActive(x.path))));
 			});
+
+			if (!renderedCount)
+				nav.appendChild(h('div', { class: 'cb-nav-empty', text: t('No configured pages are currently installed.') }));
+
+			const editBtn = h('button', { type: 'button', class: 'cb-nav-customize' }, [
+				h('span', { class: 'cb-nav-customize-ico', html: icon('sliders') }),
+				h('span', { class: 'cb-nav-label', text: t('Customize menu') })
+			]);
+			editBtn.addEventListener('click', () => C.openSimpleMenuCustomizer(editBtn));
+			nav.appendChild(editBtn);
 
 			const hint = h('div', { class: 'cb-nav-hint' }, [
 				h('span', { class: 'cb-nav-hint-ico', html: icon('sliders') }),
@@ -1114,6 +1304,533 @@
 		const cur = nav.querySelector('.cb-nav-item.active, .cb-nav-link.active');
 		if (cur && cur.scrollIntoView && nav.scrollHeight > nav.clientHeight)
 			cur.scrollIntoView({ block: 'nearest' });
+	};
+
+	/* ------------------------------------------------------------------
+	 * Simple menu customizer drawer (reuses .cb-sheet glass drawer)
+	 * ------------------------------------------------------------------ */
+	const CAT_COLOR = {
+		status: 'indigo', network: 'blue', system: 'purple', services: 'teal',
+		vpn: 'green', docker: 'blue', nas: 'orange', statistics: 'pink', control: 'orange'
+	};
+	const menuColor = (rel) => COLORS[CAT_COLOR[String(rel || '').split('/')[0]] || 'blue'];
+
+	C.openSimpleMenuCustomizer = function (opener) {
+		const model = C._navModel;
+		if (!model || simpleMenuDrawer || document.querySelector('.cb-sheet')) return;
+
+		const openerInNav = !!(opener && opener.closest && opener.closest('#topmenu'));
+
+		/* close mobile sidebar drawer before opening the bottom sheet */
+		if (document.body.classList.contains('cb-nav-open') && typeof C._closeNavDrawer === 'function')
+			C._closeNavDrawer();
+
+		const M = C.simpleMenu;
+		const appEl = document.querySelector('.cb-app');
+		const known = buildKnownMap(model);
+		const defCfg = M.defaultConfig(known, model.root);
+		const initialCfg = savedSimpleMenu(model, known);
+		const initialKey = M.encodeAttr(initialCfg);
+		const draft = M.clone(initialCfg);
+		const hasUciSave = typeof model.saveSimpleMenu === 'function';
+
+		let viewMode = 'edit'; /* 'edit' | 'pick' */
+		let pickGroup = 'common';
+		let query = '';
+		let saving = false;
+
+		/* Build searchable catalog of all installed pages (excluding logout) */
+		const catalog = [];
+		(model.categories || []).forEach((cat) => {
+			if (cat.name === 'logout') return;
+			const entries = cat.children && cat.children.length
+				? cat.children.map((ch) => ({ rel: cat.name + '/' + ch.name, title: ch.title, icon: pageIcon(ch.name, cat.name) }))
+				: [{ rel: cat.name, title: cat.title, icon: CATEGORY_ICON[cat.name] || pageIcon(cat.name) }];
+			const items = entries.filter((e) => M.isValidPath(e.rel)).map((e) => {
+				const builtin = M.builtinFor(e.rel);
+				const displayTitle = builtin ? t(builtin.title) : e.title;
+				const subTitle = (builtin && e.title && e.title !== displayTitle) ? e.title : '';
+				return {
+					rel: e.rel,
+					title: displayTitle,
+					rawTitle: e.title,
+					subTitle: subTitle,
+					icon: builtin ? builtin.icon : e.icon,
+					color: menuColor(e.rel),
+					searchText: [displayTitle, e.title, cat.title, e.rel].join(' ').toLowerCase()
+				};
+			});
+			if (items.length) catalog.push({ name: cat.name, title: cat.title, items: items });
+		});
+
+		const samePath = (a, b) => {
+			if (a === b) return true;
+			const ba = M.builtinFor(a), bb = M.builtinFor(b);
+			return !!(ba && bb && ba.paths === bb.paths);
+		};
+		const findInList = (list, rel) => list.findIndex((x) => samePath(x, rel));
+		const isDirty = () => M.encodeAttr(draft) !== initialKey;
+
+		const titleId = uid();
+		const scrim = h('div', { class: 'cb-sheet-scrim cb-sheet-scrim-menu' });
+		const backBtn = h('button', {
+			type: 'button', class: 'cb-sheet-back',
+			'aria-label': t('Back'), title: t('Back'), html: icon('chevleft'), hidden: true
+		});
+		const titleEl = h('h3', { id: titleId, text: t('Customize simple menu') });
+		const closeBtn = h('button', { type: 'button', class: 'cb-sheet-close', 'aria-label': t('Close'), title: t('Close'), html: icon('close') });
+
+		const searchInput = h('input', {
+			type: 'search', class: 'cb-sheet-search-input',
+			placeholder: t('Search pages or plugins…'),
+			'aria-label': t('Search pages or plugins…'),
+			autocomplete: 'off', spellcheck: 'false'
+		});
+		const searchClear = h('button', {
+			type: 'button', class: 'cb-sheet-search-clear',
+			'aria-label': t('Clear'), title: t('Clear'), html: icon('close'), hidden: true
+		});
+		const searchBar = h('div', { class: 'cb-sheet-search', hidden: true }, [
+			h('div', { class: 'cb-sheet-search-box' }, [
+				h('span', { class: 'cb-sheet-search-ico', html: icon('search') }),
+				searchInput,
+				searchClear
+			])
+		]);
+
+		const body = h('div', { class: 'cb-sheet-body' });
+		const statusEl = h('div', { class: 'cb-sheet-status', role: 'status', 'aria-live': 'polite' });
+		const resetBtn = h('button', { type: 'button', class: 'cbi-button cbi-button-reset', text: t('Restore default') });
+		const cancelBtn = h('button', { type: 'button', class: 'cbi-button', text: t('Cancel') });
+		const saveBtn = h('button', { type: 'button', class: 'cbi-button cbi-button-save', text: t('Save') });
+
+		const sheet = h('aside', { class: 'cb-sheet cb-sheet-menu', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId }, [
+			h('div', { class: 'cb-sheet-head' }, [
+				h('div', { class: 'cb-sheet-head-main' }, [backBtn, titleEl]),
+				closeBtn
+			]),
+			searchBar,
+			body,
+			h('div', { class: 'cb-sheet-foot' }, [
+				statusEl,
+				h('div', { class: 'cb-sheet-actions' }, [resetBtn, h('div', { class: 'cb-sheet-actions-end' }, [cancelBtn, saveBtn])])
+			])
+		]);
+
+		const makeMoveBtn = (dir, disabled, label, onClick) => {
+			const b = h('button', {
+				type: 'button',
+				class: 'cbi-button ' + (dir < 0 ? 'cbi-button-up' : 'cbi-button-down') + ' cb-sheet-ico-btn',
+				title: label, 'aria-label': label, html: icon(dir < 0 ? 'chevup' : 'chevdown')
+			});
+			b.disabled = !!disabled;
+			b.addEventListener('click', onClick);
+			return b;
+		};
+		const swap = (arr, i, j) => { const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; };
+
+		function describeSaved(rel) {
+			const resolved = M.resolvePath(rel, known, model.root);
+			if (resolved) {
+				return {
+					installed: true,
+					title: resolved.builtin ? t(resolved.builtin.title) : resolved.node.title,
+					sub: resolved.builtin ? '' : (resolved.node.catTitle || ''),
+					icon: resolved.builtin ? resolved.builtin.icon : resolved.node.icon,
+					color: menuColor(resolved.rel)
+				};
+			}
+			const builtin = M.builtinFor(rel);
+			const parts = rel.split('/');
+			const fallbackIcon = builtin ? builtin.icon : (parts.length > 1 ? pageIcon(parts[1], parts[0]) : (CATEGORY_ICON[parts[0]] || pageIcon(parts[0])));
+			return {
+				installed: false,
+				title: builtin ? t(builtin.title) : rel,
+				sub: '',
+				icon: fallbackIcon,
+				color: COLORS.gray
+			};
+		}
+
+		function syncControls() {
+			const isPick = viewMode === 'pick';
+			backBtn.hidden = !isPick;
+			searchBar.hidden = !isPick;
+			titleEl.textContent = isPick
+				? (pickGroup === 'common' ? t('Add to Common') : t('Add to System'))
+				: t('Customize simple menu');
+			searchClear.hidden = !query;
+			resetBtn.disabled = saving || M.isDefault(draft, known, model.root);
+			saveBtn.disabled = saving;
+			cancelBtn.disabled = saving;
+			closeBtn.disabled = saving;
+			backBtn.disabled = saving;
+			searchInput.disabled = saving;
+			searchClear.disabled = saving;
+			if (saving) body.setAttribute('inert', '');
+			else body.removeAttribute('inert');
+		}
+
+		const canAppendToGroup = (list, rel) => {
+			const curBytes = list.length ? list.join(' ').length : 0;
+			return M.count(draft) < M.MAX_ITEMS && ((curBytes ? curBytes + 1 : 0) + rel.length) <= M.MAX_BYTES;
+		};
+
+		function captureEditFocus() {
+			const ae = document.activeElement;
+			if (!ae || !body.contains(ae)) return null;
+			const row = ae.closest('[data-row-key]');
+			const grp = ae.closest('[data-group]');
+			const btnKind = ['cbi-button-up', 'cbi-button-down', 'cbi-button-remove', 'cb-sheet-add'].find((c) => ae.classList.contains(c)) || '';
+			return { rowKey: row ? row.dataset.rowKey : '', group: grp ? grp.dataset.group : '', btnKind: btnKind };
+		}
+
+		function restoreEditFocus(info) {
+			if (!info) return;
+			let target = null;
+			if (info.rowKey) {
+				const row = Array.from(body.querySelectorAll('[data-row-key]')).find((el) => el.dataset.rowKey === info.rowKey);
+				if (row) {
+					const order = info.btnKind === 'cbi-button-up' ? ['.cbi-button-up', '.cbi-button-down', '.cbi-button-remove'] :
+						(info.btnKind === 'cbi-button-down' ? ['.cbi-button-down', '.cbi-button-up', '.cbi-button-remove'] :
+							['.' + info.btnKind, '.cbi-button-remove', '.cbi-button-up', '.cbi-button-down']);
+					for (const sel of order) {
+						const cand = sel !== '.' ? row.querySelector(sel) : null;
+						if (cand && !cand.disabled) { target = cand; break; }
+					}
+				}
+			}
+			if (!target && info.group) {
+				const grp = body.querySelector('.cb-sheet-group[data-group="' + info.group + '"]');
+				if (grp) {
+					const add = grp.querySelector('.cb-sheet-add:not(:disabled)');
+					const anyBtn = grp.querySelector('button:not(:disabled)');
+					target = add || anyBtn;
+				}
+			}
+			(target || closeBtn).focus({ preventScroll: true });
+		}
+
+		function paintEdit(animate) {
+			const scrollTop = body.scrollTop;
+			const focusInfo = captureEditFocus();
+			const doAnim = !!(animate && canWaapi() && !reducedMotion());
+			const prevRows = new Map();
+			if (doAnim) {
+				const br = body.getBoundingClientRect();
+				body.querySelectorAll('[data-row-key]').forEach((el) => {
+					prevRows.set(el.dataset.rowKey, el.getBoundingClientRect().top - br.top + scrollTop);
+				});
+			}
+
+			body.innerHTML = '';
+			const total = M.count(draft);
+			const onlyOne = total <= 1;
+			const atMax = total >= M.MAX_ITEMS;
+
+			[
+				{ key: 'common', label: C.SIMPLE_MENU[0].group },
+				{ key: 'system', label: C.SIMPLE_MENU[1].group }
+			].forEach((g) => {
+				const list = draft[g.key];
+				const rows = [];
+				if (!list.length) {
+					rows.push(h('div', { class: 'cb-sheet-empty', text: t('No items in this group.') }));
+				}
+				else {
+					list.forEach((rel, idx) => {
+						const info = describeSaved(rel);
+						const rm = h('button', {
+							type: 'button', class: 'cbi-button cbi-button-remove cb-sheet-ico-btn',
+							title: t('Remove'), 'aria-label': t('Remove'), html: icon('close')
+						});
+						rm.disabled = onlyOne;
+						rm.addEventListener('click', () => {
+							if (M.count(draft) <= 1) { statusEl.textContent = t('Keep at least one menu item.'); return; }
+							list.splice(idx, 1);
+							statusEl.textContent = M.count(draft) <= 1 ? t('Keep at least one menu item.') : '';
+							applyDraft(true);
+						});
+						const textKids = [h('span', { class: 'cb-sheet-name', text: info.title })];
+						if (!info.installed)
+							textKids.push(h('span', { class: 'cb-sheet-tag', text: t('Not installed') }));
+						else if (info.sub)
+							textKids.push(h('span', { class: 'cb-sheet-sub', text: info.sub }));
+
+						rows.push(h('div', { class: 'cb-sheet-row' + (info.installed ? '' : ' is-off'), 'data-row-key': g.key + ':' + rel }, [
+							h('span', { class: 'cb-ico', style: '--c:' + info.color, html: icon(info.icon) }),
+							h('div', { class: 'cb-sheet-text' }, textKids),
+							h('div', { class: 'cb-sheet-ctrl' }, [
+								makeMoveBtn(-1, idx === 0, t('Move up'), () => { swap(list, idx, idx - 1); statusEl.textContent = ''; applyDraft(true); }),
+								makeMoveBtn(1, idx === list.length - 1, t('Move down'), () => { swap(list, idx, idx + 1); statusEl.textContent = ''; applyDraft(true); }),
+								rm
+							])
+						]));
+					});
+				}
+
+				const addBtn = h('button', {
+					type: 'button', class: 'cbi-button cbi-button-add cb-sheet-add',
+					html: icon('plus') + '<span>' + esc(t('Add page')) + '</span>'
+				});
+				addBtn.disabled = atMax;
+				addBtn.addEventListener('click', () => {
+					if (M.count(draft) >= M.MAX_ITEMS) { statusEl.textContent = t('Maximum %d menu items.', M.MAX_ITEMS); return; }
+					pickGroup = g.key;
+					viewMode = 'pick';
+					query = '';
+					searchInput.value = '';
+					statusEl.textContent = '';
+					paintSheet(false);
+					body.scrollTop = 0;
+					searchInput.focus({ preventScroll: true });
+				});
+				rows.push(h('div', { class: 'cb-sheet-add-row', 'data-row-key': g.key + ':add' }, [
+					addBtn,
+					h('span', { class: 'cb-sheet-count', text: total + ' / ' + M.MAX_ITEMS })
+				]));
+
+				body.appendChild(h('div', { class: 'cb-sheet-group', 'data-group': g.key }, [
+					h('div', { class: 'cb-sheet-group-head' }, [
+						h('span', { class: 'cb-sheet-group-title', text: t(g.label) }),
+						h('span', { class: 'cb-sheet-count', text: String(list.length) })
+					]),
+					h('div', { class: 'cb-sheet-list' }, rows)
+				]));
+			});
+
+			syncControls();
+			body.scrollTop = scrollTop;
+			restoreEditFocus(focusInfo);
+
+			if (doAnim && prevRows.size) {
+				const br = body.getBoundingClientRect();
+				body.querySelectorAll('[data-row-key]').forEach((el) => {
+					const prevTop = prevRows.get(el.dataset.rowKey);
+					if (prevTop == null) return;
+					const dy = prevTop - (el.getBoundingClientRect().top - br.top + body.scrollTop);
+					if (Math.abs(dy) > 2 && Math.abs(dy) < 360) {
+						el.animate([
+							{ transform: 'translate3d(0,' + dy + 'px,0)' },
+							{ transform: 'translate3d(0,0,0)' }
+						], { duration: 220, easing: EASE_OUT });
+					}
+				});
+			}
+		}
+
+		function paintPicker() {
+			const scrollTop = body.scrollTop;
+			const focusedPath = (document.activeElement && body.contains(document.activeElement) && document.activeElement.dataset)
+				? document.activeElement.dataset.path : '';
+			body.innerHTML = '';
+			const q = query.trim().toLowerCase();
+			const otherGroup = pickGroup === 'common' ? 'system' : 'common';
+			const targetList = draft[pickGroup];
+			const otherList = draft[otherGroup];
+			const total = M.count(draft);
+			const onlyOne = total <= 1;
+			let shown = 0;
+
+			catalog.forEach((cat) => {
+				const matches = q ? cat.items.filter((it) => it.searchText.indexOf(q) >= 0) : cat.items;
+				if (!matches.length) return;
+				shown += matches.length;
+				const rows = matches.map((it) => {
+					const inTarget = findInList(targetList, it.rel);
+					const inOther = inTarget < 0 ? findInList(otherList, it.rel) : -1;
+					const cls = 'cb-picker-item' + (inTarget >= 0 ? ' is-added' : (inOther >= 0 ? ' is-other' : ''));
+					const badge = inTarget >= 0
+						? h('span', { class: 'cb-picker-badge ok' }, [h('span', { class: 'cb-picker-badge-ico', html: icon('check') }), t('Added')])
+						: (inOther >= 0
+							? h('span', { class: 'cb-picker-badge muted', text: otherGroup === 'common' ? t('In Common') : t('In System') })
+							: h('span', { class: 'cb-picker-plus', html: icon('plus') }));
+					const textKids = [h('span', { class: 'cb-sheet-name', text: it.title })];
+					if (it.subTitle) textKids.push(h('span', { class: 'cb-sheet-sub', text: it.subTitle }));
+					const btn = h('button', {
+						type: 'button', class: cls, 'data-path': it.rel,
+						'aria-pressed': inTarget >= 0 ? 'true' : (inOther >= 0 ? null : 'false')
+					}, [
+						h('span', { class: 'cb-ico', style: '--c:' + (inOther >= 0 ? COLORS.gray : it.color), html: icon(it.icon) }),
+						h('div', { class: 'cb-sheet-text' }, textKids),
+						badge
+					]);
+					if (inOther >= 0) {
+						btn.disabled = true;
+					}
+					else if (inTarget >= 0) {
+						btn.disabled = onlyOne;
+						btn.addEventListener('click', () => {
+							if (M.count(draft) <= 1) { statusEl.textContent = t('Keep at least one menu item.'); return; }
+							const idx = findInList(targetList, it.rel);
+							if (idx >= 0) targetList.splice(idx, 1);
+							statusEl.textContent = M.count(draft) <= 1 ? t('Keep at least one menu item.') : '';
+							applyDraft(false);
+						});
+					}
+					else {
+						const canAdd = canAppendToGroup(targetList, it.rel);
+						btn.disabled = !canAdd;
+						btn.addEventListener('click', () => {
+							if (!canAppendToGroup(targetList, it.rel)) {
+								statusEl.textContent = t('Maximum %d menu items.', M.MAX_ITEMS);
+								return;
+							}
+							targetList.push(it.rel);
+							statusEl.textContent = M.count(draft) >= M.MAX_ITEMS ? t('Maximum %d menu items.', M.MAX_ITEMS) : '';
+							applyDraft(false);
+						});
+					}
+					return btn;
+				});
+
+				body.appendChild(h('div', { class: 'cb-sheet-group' }, [
+					h('div', { class: 'cb-sheet-group-head' }, [
+						h('span', { class: 'cb-sheet-group-title', text: cat.title }),
+						h('span', { class: 'cb-sheet-count', text: String(matches.length) })
+					]),
+					h('div', { class: 'cb-sheet-list' }, rows)
+				]));
+			});
+
+			if (!shown)
+				body.appendChild(h('div', { class: 'cb-sheet-empty cb-sheet-empty-card', text: t('No matching pages.') }));
+
+			syncControls();
+			body.scrollTop = scrollTop;
+			if (focusedPath) {
+				const nextBtn = Array.from(body.querySelectorAll('.cb-picker-item')).find((el) => el.dataset.path === focusedPath && !el.disabled);
+				(nextBtn || searchInput).focus({ preventScroll: true });
+			}
+		}
+
+		function paintSheet(animate) {
+			if (viewMode === 'pick') paintPicker();
+			else paintEdit(animate);
+		}
+
+		function applyDraft(animate) {
+			C.renderNav(model);
+			paintSheet(animate);
+		}
+
+		function exitPicker() {
+			viewMode = 'edit';
+			statusEl.textContent = '';
+			paintSheet(false);
+			const addBtn = body.querySelector('.cb-sheet-group[data-group="' + pickGroup + '"] .cb-sheet-add:not(:disabled)');
+			(addBtn || closeBtn).focus({ preventScroll: true });
+		}
+
+		function close(commit) {
+			if (!simpleMenuDrawer) return;
+			simpleMenuDrawer.closed = true;
+			document.removeEventListener('keydown', onKey);
+			scrim.remove();
+			sheet.remove();
+			document.body.classList.remove('cb-sheet-open');
+			if (appEl) appEl.removeAttribute('inert');
+			simpleMenuDrawer = null;
+			C.renderNav(model);
+			const target = openerInNav ? document.querySelector('#topmenu .cb-nav-customize') : opener;
+			const burger = document.getElementById('cb-burger');
+			if (target && target.offsetParent !== null && !target.closest('[inert]'))
+				target.focus({ preventScroll: true });
+			else if (burger && burger.offsetParent !== null)
+				burger.focus({ preventScroll: true });
+			void commit;
+		}
+
+		async function doSave() {
+			if (saving) return;
+			saving = true;
+			statusEl.textContent = t('Saving…');
+			syncControls();
+			try {
+				const clean = M.normalize(draft, defCfg);
+				const isDef = M.isDefault(clean, known, model.root);
+				if (hasUciSave) {
+					if (isDef && typeof model.resetSimpleMenu === 'function') {
+						await model.resetSimpleMenu();
+						C._simpleMenuAttr = '';
+						if (model.simpleMenuAttr !== undefined) model.simpleMenuAttr = '';
+					}
+					else {
+						await model.saveSimpleMenu(clean);
+						C._simpleMenuAttr = M.encodeAttr(clean);
+						if (model.simpleMenuAttr !== undefined) model.simpleMenuAttr = C._simpleMenuAttr;
+					}
+				}
+				else {
+					if (isDef) {
+						try { window.localStorage.removeItem('carbon.simpleMenu'); } catch (e) { /* ignore */ }
+					}
+					else {
+						store.set('carbon.simpleMenu', M.encodeAttr(clean));
+					}
+				}
+				try { document.dispatchEvent(new CustomEvent('carbon:simple-menu-change', { detail: { custom: !isDef } })); } catch (e) { /* ignore */ }
+				saving = false;
+				close(true);
+			}
+			catch (err) {
+				saving = false;
+				statusEl.textContent = (err && err.code === 'denied')
+					? t('Permission denied. Log out and log in again once after updating Carbon, then retry.')
+					: (err && err.code === 'invalid_simple_menu' ? t('Invalid simple menu configuration.') : t('Failed to save menu.'));
+				syncControls();
+			}
+		}
+
+		const onKey = (e) => {
+			if (e.key !== 'Escape' || e.isComposing || e.keyCode === 229 || saving) return;
+			e.preventDefault();
+			if (viewMode === 'pick') exitPicker();
+			else close(false);
+		};
+
+		backBtn.addEventListener('click', () => { if (!saving) exitPicker(); });
+		searchInput.addEventListener('input', () => {
+			query = searchInput.value;
+			searchClear.hidden = !query;
+			paintPicker();
+		});
+		searchClear.addEventListener('click', () => {
+			if (saving) return;
+			query = '';
+			searchInput.value = '';
+			searchClear.hidden = true;
+			paintPicker();
+			searchInput.focus({ preventScroll: true });
+		});
+		resetBtn.addEventListener('click', () => {
+			if (saving) return;
+			const next = M.defaultConfig(known, model.root);
+			draft.common = next.common;
+			draft.system = next.system;
+			viewMode = 'edit';
+			statusEl.textContent = '';
+			applyDraft(true);
+		});
+		cancelBtn.addEventListener('click', () => { if (!saving) close(false); });
+		closeBtn.addEventListener('click', () => { if (!saving) close(false); });
+		scrim.addEventListener('click', () => { if (!saving && !isDirty()) close(false); });
+		saveBtn.addEventListener('click', doSave);
+
+		simpleMenuDrawer = { draft: draft, closed: false };
+		C.renderNav(model);
+		paintSheet(false);
+		document.body.appendChild(scrim);
+		document.body.appendChild(sheet);
+		document.body.classList.add('cb-sheet-open');
+		if (appEl) appEl.setAttribute('inert', '');
+		document.addEventListener('keydown', onKey);
+		requestAnimationFrame(() => {
+			if (!simpleMenuDrawer || simpleMenuDrawer.closed) return;
+			scrim.classList.add('show');
+			sheet.classList.add('show');
+			closeBtn.focus({ preventScroll: true });
+		});
 	};
 
 	/* Toolbar title: "Network › Wireless" */
@@ -1383,11 +2100,93 @@
 		return { idle: (v[3] || 0) + (v[4] || 0), total: total, cores: lines.filter((l) => /^cpu\d/.test(l)).length };
 	}
 
-	function radioBand(cfg) {
+	C.loadStatus = function (load1, cores) {
+		if (!Number.isFinite(load1) || load1 < 0 || !Number.isFinite(cores) || cores <= 0) return null;
+		const ratio = load1 / cores;
+		if (ratio >= 1) return { level: 'bad', label: N_('High') };
+		if (ratio >= 0.7) return { level: 'warn', label: N_('Busy') };
+		return { level: 'ok', label: N_('Normal') };
+	};
+
+	const BAND_LABEL = Object.assign(Object.create(null), { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz', '60g': '60 GHz' });
+	function radioBandInfo(cfg) {
 		cfg = cfg || {};
-		const band = cfg.band ? ({ '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz', '60g': '60 GHz' })[cfg.band] : null;
-		return band || (cfg.hwmode ? (/a/.test(cfg.hwmode) ? '5 GHz' : '2.4 GHz') : null);
+		const band = String(cfg.band || '').toLowerCase();
+		if (band && BAND_LABEL[band]) return { key: band, label: BAND_LABEL[band] };
+		if (cfg.hwmode) {
+			const key = /a/.test(cfg.hwmode) ? '5g' : '2g';
+			return { key: key, label: BAND_LABEL[key] };
+		}
+		const ch = parseInt(cfg.channel, 10);
+		if (ch >= 1 && ch <= 14) return { key: '2g', label: '2.4 GHz' };
+		if (ch >= 32 && ch <= 177) return { key: '5g', label: '5 GHz' };
+		return { key: '', label: null };
 	}
+	function radioBand(cfg) {
+		return radioBandInfo(cfg).label;
+	}
+	function wirelessWidth(htmode) {
+		const m = String(htmode || '').trim().match(/(?:^|\D)(80\+80|320|160|80|40|20)[+-]?$/);
+		return m ? m[1] + ' MHz' : null;
+	}
+	function wirelessEncryption(enc) {
+		const raw = String(enc || '').trim().toLowerCase();
+		if (!raw || raw === 'none') return null;
+		if (/^sae-mixed\b/.test(raw)) return 'WPA2/WPA3';
+		if (/^sae\b/.test(raw)) return 'WPA3';
+		if (/^psk-mixed\b/.test(raw)) return 'WPA/WPA2';
+		if (/^psk2\b/.test(raw)) return 'WPA2';
+		if (/^psk\b/.test(raw)) return 'WPA';
+		if (/^owe\b/.test(raw)) return 'OWE';
+		return raw.toUpperCase();
+	}
+
+	C.wirelessSummary = function (w, stations) {
+		const hasStations = Array.isArray(stations);
+		const perIf = hasStations ? new Map() : null;
+		const allMacs = hasStations ? new Set() : null;
+		if (hasStations) {
+			stations.forEach((s) => {
+				if (!s || !s.ifname) return;
+				const mac = String(s.mac || '').toLowerCase();
+				if (!MAC_RE.test(mac) || mac === '00:00:00:00:00:00') return;
+				let set = perIf.get(s.ifname);
+				if (!set) perIf.set(s.ifname, set = new Set());
+				set.add(mac);
+			});
+		}
+		const rows = [];
+		if (w && typeof w === 'object') {
+			Object.keys(w).sort().forEach((radio) => {
+				const r = w[radio] || {}, cfg = r.config || {};
+				const b = radioBandInfo(cfg);
+				const channel = cfg.channel && cfg.channel !== 'auto' ? String(cfg.channel) : null;
+				const width = wirelessWidth(cfg.htmode);
+				(r.interfaces || []).forEach((i) => {
+					const ic = i.config || {};
+					if (ic.mode && ic.mode !== 'ap') return;
+					const ssid = ic.ssid ? String(ic.ssid) : '';
+					const encryption = wirelessEncryption(ic.encryption);
+					const meta = [channel ? 'CH ' + channel : null, width, encryption].filter(Boolean).join(' · ');
+					const sub = [b.label, meta].filter(Boolean).join(' · ');
+					const on = !!r.up && !r.disabled && !ic.disabled && !cfg.disabled;
+					const ifname = i.ifname || '';
+					let clients = null;
+					if (on && ifname && hasStations) {
+						const set = perIf.get(ifname);
+						clients = set ? set.size : 0;
+						if (set) set.forEach((mac) => allMacs.add(mac));
+					}
+					rows.push({
+						radio: radio, ifname: ifname, ssid: ssid, hidden: !ssid,
+						band: b.label, bandKey: b.key, channel: channel, width: width, encryption: encryption,
+						meta: meta, sub: sub, on: on, clients: clients
+					});
+				});
+			});
+		}
+		return { rows: rows, totalClients: hasStations ? allMacs.size : null };
+	};
 
 	/* AP interfaces that are up → { ifnames: [...], bands: { ifname: '5 GHz' } } */
 	function apInterfaces(w) {
@@ -1801,12 +2600,6 @@
 	const DASH_MAX_TRAFFIC = 4;
 	const DASH_DEV_RE = /^[A-Za-z0-9._:@-]{1,32}$/;
 
-	const splitTokens = (val) => {
-		if (Array.isArray(val)) return val.map((x) => String(x || '').trim()).filter(Boolean);
-		const s = String(val == null ? '' : val).trim();
-		if (!s || s === 'none') return [];
-		return s.split(/\s+/).filter(Boolean);
-	};
 	const cleanDev = (v) => {
 		const s = String(v == null ? '' : v).trim();
 		return DASH_DEV_RE.test(s) ? s : 'auto';
@@ -2036,7 +2829,7 @@
 			const heroIcon = () => {
 				const custom = document.querySelector('.cb-brand-logo[data-custom]');
 				return custom ? h('div', { class: 'cb-hero-icon custom' }, h('img', { src: custom.getAttribute('src'), alt: '' }))
-					: h('div', { class: 'cb-hero-icon', html: LOGO });
+					: h('div', { class: 'cb-hero-icon', html: logo() });
 			};
 			const setRate = (r, v) => { const b = fmt.bytes(v, true); r.val.innerHTML = esc(b[0]) + '<small>' + esc(b[1]) + '</small>'; };
 			const setSpan = (el, n) => {
@@ -2048,7 +2841,7 @@
 				board: null, ifs: null, netdevs: null, netdevsAt: 0,
 				info: null, conntrack: null, temps: null,
 				wireless: undefined, noRadio: !urls.wireless,
-				aps: null, hints: null, hintsAt: 0, devices: null, wifiCount: null,
+				aps: null, stations: undefined, hints: null, hintsAt: 0, devices: null, wifiCount: null,
 				prevCpu: null, cpuPct: null, cpuCores: 0, loadHistory: [],
 				showAll: false,
 				rateData: null, rateSeen: false, rateSource: '', rateNext: 0, rateGeneration: 0,
@@ -2084,7 +2877,7 @@
 					conntrack: hasTile('connections'),
 					temps: hasRes || hasTile('temp'),
 					wireless: needWireless,
-					stations: needDevices || hasTile('wifi'),
+					stations: needWireless,
 					leases: needDevices,
 					neighbors: needDevices,
 					hints: needDevices,
@@ -2322,13 +3115,14 @@
 			}
 
 			function buildWireless() {
+				const count = h('span', { class: 'cb-count' });
 				const list = h('ul', { class: 'cb-list' });
 				const el = h('div', { class: 'cb-card cb-wireless span-6' + (st.noRadio ? ' hidden' : ''), 'data-panel-key': 'detail:wireless' }, [
-					h('div', { class: 'cb-card-head' }, [h('h3', null, t('Wireless')), manage(urls.wireless)]),
+					h('div', { class: 'cb-card-head' }, [h('h3', null, [t('Wireless'), count]), manage(urls.wireless)]),
 					list
 				]);
 				dash.appendChild(el);
-				view.wireless = { el: el, list: list };
+				view.wireless = { el: el, count: count, list: list };
 			}
 
 			function buildInterfaces() {
@@ -2510,38 +3304,41 @@
 				paintDeviceRates();
 			}
 
-			function wirelessRows(w) {
-				const rows = [];
-				if (w) Object.keys(w).sort().forEach((radio) => {
-					const r = w[radio] || {}, cfg = r.config || {};
-					const band = radioBand(cfg);
-					(r.interfaces || []).forEach((i) => {
-						const ic = i.config || {};
-						if (ic.mode && ic.mode !== 'ap') return;
-						rows.push({
-							ssid: ic.ssid || t('Hidden network'),
-							band: band,
-							sub: [band, cfg.channel && cfg.channel !== 'auto' ? 'CH ' + cfg.channel : null, (ic.encryption || '').toUpperCase().replace(/^PSK2.*/, 'WPA2').replace(/^SAE.*/, 'WPA3').replace(/^NONE$/, '') || null].filter(Boolean).join(' · '),
-							on: !!r.up && !r.disabled && !ic.disabled && !cfg.disabled
-						});
-					});
-				});
-				return rows;
+			function clientCountLabel(n) {
+				return n === 1 ? t('%d device', 1) : t('%d devices', n);
 			}
 
 			function paintWireless() {
 				if (!st.fetched.wireless) return;
 				const w = st.wireless;
-				const rows = wirelessRows(w);
+				const summary = C.wirelessSummary(w, st.stations);
+				const rows = summary.rows;
+				const active = rows.filter((x) => x.on);
+				const total = summary.totalClients != null ? summary.totalClients : st.wifiCount;
 				applyDetailSpans();
 				if (view.wireless && !st.noRadio) {
+					view.wireless.count.textContent = (active.length && total != null) ? String(total) : '';
 					view.wireless.list.innerHTML = '';
 					if (!rows.length) view.wireless.list.appendChild(h('li', { class: 'cb-empty', text: w ? t('No wireless') : t('Unavailable') }));
-					else rows.forEach((x) => view.wireless.list.appendChild(h('li', null, [
-						h('span', { class: 'cb-ico', style: '--c:' + (x.on ? COLORS.blue : COLORS.gray), html: icon('wifi') }),
-						h('div', { class: 'cb-list-main' }, [h('span', { class: 'cb-list-title', text: x.ssid }), h('span', { class: 'cb-list-sub', text: x.sub })]),
-						h('span', { class: 'cb-pill sm ' + (x.on ? 'ok' : 'off'), text: x.on ? t('On') : t('Off') })
-					])));
+					else rows.forEach((x) => {
+						const name = x.ssid || t('Hidden network');
+						const head = h('span', { class: 'cb-list-title cb-wifi-head' }, [
+							h('span', { class: 'cb-wifi-ssid', text: name }),
+							x.band ? h('span', { class: 'cb-band' + (x.bandKey ? ' cb-band-' + x.bandKey : ''), text: x.band }) : null
+						]);
+						const aside = h('div', { class: 'cb-list-aside cb-wifi-aside' }, [
+							x.on && x.clients != null ? h('span', { class: 'cb-wifi-clients', text: clientCountLabel(x.clients) }) : null,
+							h('span', { class: 'cb-pill sm ' + (x.on ? 'ok' : 'off'), text: x.on ? t('On') : t('Off') })
+						]);
+						view.wireless.list.appendChild(h('li', null, [
+							h('span', { class: 'cb-ico', style: '--c:' + (x.on ? COLORS.blue : COLORS.gray), html: icon('wifi') }),
+							h('div', { class: 'cb-list-main' }, [
+								head,
+								x.meta ? h('span', { class: 'cb-list-sub', text: x.meta }) : null
+							]),
+							aside
+						]));
+					});
 				}
 				if (view.tiles.wifi) {
 					const tw = view.tiles.wifi;
@@ -2556,18 +3353,33 @@
 						tw.el.title = '';
 					}
 					else {
-						const active = rows.filter((x) => x.on);
-						const bands = [];
-						active.forEach((x) => { if (x.band && bands.indexOf(x.band) < 0) bands.push(x.band); });
 						if (!active.length) {
 							tw.val.textContent = t('Off');
-							tw.sub.textContent = rows.length ? rows.map((x) => x.ssid).slice(0, 2).join(' · ') : t('No wireless');
+							tw.sub.textContent = rows.length ? rows.map((x) => x.ssid || t('Hidden network')).slice(0, 2).join(' · ') : t('No wireless');
 						}
 						else {
-							tw.val.textContent = st.wifiCount != null ? String(st.wifiCount) : t('On');
-							tw.sub.textContent = bands.length ? bands.join(' · ') : active.map((x) => x.ssid).slice(0, 2).join(' · ');
+							tw.val.textContent = total != null ? String(total) : t('On');
+							const shown = active.length > 3 ? active.slice(0, 2) : active;
+							const list = h('div', { class: 'cb-wifi-rows' }, shown.map((x) => h('div', { class: 'cb-wifi-row' }, [
+								h('span', { class: 'cb-wifi-row-head' }, [
+									h('span', { class: 'cb-wifi-row-ssid', text: x.ssid || t('Hidden network') }),
+									x.band ? h('span', { class: 'cb-band' + (x.bandKey ? ' cb-band-' + x.bandKey : '') + ' cb-wifi-row-band', text: x.band }) : null
+								]),
+								x.clients != null ? h('span', { class: 'cb-wifi-row-count', text: String(x.clients) }) : null
+							])));
+							if (active.length > 3)
+								list.appendChild(h('div', { class: 'cb-wifi-row cb-wifi-row-more', text: t('+%d more', active.length - 2) }));
+							tw.sub.innerHTML = '';
+							tw.sub.appendChild(list);
 						}
-						tw.el.title = rows.map((x) => x.ssid + (x.sub ? ' (' + x.sub + ')' : '') + ' · ' + (x.on ? t('On') : t('Off'))).join('\n');
+						tw.el.title = rows.map((x) => {
+							const name = x.ssid || t('Hidden network');
+							return [
+								name + (x.sub ? ' (' + x.sub + ')' : ''),
+								x.on && x.clients != null ? clientCountLabel(x.clients) : null,
+								x.on ? t('On') : t('Off')
+							].filter(Boolean).join(' · ');
+						}).join('\n');
 					}
 				}
 			}
@@ -2578,13 +3390,27 @@
 				else if (!st.prevCpu) view.resources.rCpu.set(null, t('Unavailable'));
 			}
 
+			function loadTooltip(load) {
+				const l = load.map((x) => (x / 65536).toFixed(2));
+				return st.cpuCores > 0
+					? t('1 / 5 / 15 min load: %s · %s · %s (%d cores)', l[0], l[1], l[2], st.cpuCores)
+					: t('1 / 5 / 15 min load: %s · %s · %s', l[0], l[1], l[2]);
+			}
+
 			function paintKv() {
 				if (!view.resources) return;
 				const kv = view.resources.kv;
 				kv.innerHTML = '';
-				if (st.info && st.info.load) {
-					const l = st.info.load.map((x) => (x / 65536).toFixed(2));
-					kv.appendChild(h('li', null, [h('span', { text: t('Load average') }), h('span', { class: 'cb-mono', text: l.join(' · ') })]));
+				if (st.info && Array.isArray(st.info.load) && st.info.load.length >= 3) {
+					const load1 = st.info.load[0] / 65536;
+					const status = C.loadStatus(load1, st.cpuCores);
+					kv.appendChild(h('li', { class: 'cb-kv-help', title: loadTooltip(st.info.load) }, [
+						h('span', { text: t('Load average') }),
+						h('span', { class: 'cb-load-val' }, [
+							h('span', { class: 'cb-mono', text: load1.toFixed(2) }),
+							status ? h('span', { class: 'cb-load-badge ' + status.level, text: t(status.label) }) : null
+						])
+					]));
 				}
 				if (st.temps && st.temps.length) {
 					const sensorName = (n) => String(n || '').replace(/[-_ ]?thermal$/i, '').replace(/[-_]+/g, ' ').trim();
@@ -2630,10 +3456,11 @@
 						view.resources.rDisk.set(null, t('Unavailable'));
 					}
 				}
-				if (info && info.load && view.tiles.load) {
+				if (info && Array.isArray(info.load) && info.load.length >= 3 && view.tiles.load) {
 					const l = info.load.map((x) => (x / 65536).toFixed(2));
 					view.tiles.load.val.textContent = l[0];
 					view.tiles.load.sub.textContent = t('1 min average');
+					view.tiles.load.el.title = loadTooltip(info.load);
 				}
 				if (info && info.uptime != null && view.tiles.uptime) {
 					view.tiles.uptime.val.textContent = fmt.duration(info.uptime);
@@ -2676,9 +3503,6 @@
 			}
 
 			/* ---------------- grid mount & live layout apply ---------------- */
-			const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
-			const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-			const canWaapi = () => typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function';
 			let hasRendered = false;
 			let ghostLayer = null;
 
@@ -2936,18 +3760,10 @@
 					const same = known && known.join() === aps.ifnames.join();
 					st.aps = aps.ifnames;
 					stations = same ? r[5] : (aps.ifnames.length && P.stations ? await safe(() => P.stations(aps.ifnames)) : null);
+					st.stations = stations;
 					st.fetched.stations = true;
-					if (!needs.leases && !needs.neighbors) {
-						if (Array.isArray(stations)) {
-							const macs = new Set();
-							stations.forEach((s) => {
-								const mac = String((s && s.mac) || '').toLowerCase();
-								if (MAC_RE.test(mac) && mac !== '00:00:00:00:00:00') macs.add(mac);
-							});
-							st.wifiCount = macs.size;
-						}
-						else st.wifiCount = null;
-					}
+					if (!needs.leases && !needs.neighbors)
+						st.wifiCount = C.wirelessSummary(st.wireless, stations).totalClients;
 				}
 
 				if (needs.leases || needs.neighbors) {
@@ -3017,15 +3833,23 @@
 				if (needs.cpu) {
 					const cpu = parseCpu(r[0]);
 					st.fetched.cpu = true;
+					let coresChanged = false;
 					if (cpu) {
+						if (cpu.cores && cpu.cores !== st.cpuCores) {
+							st.cpuCores = cpu.cores;
+							coresChanged = true;
+						}
 						if (st.prevCpu && cpu.total > st.prevCpu.total) {
 							const dt = cpu.total - st.prevCpu.total, di = cpu.idle - st.prevCpu.idle;
 							st.cpuPct = (1 - di / dt) * 100;
-							st.cpuCores = cpu.cores;
 						}
 						st.prevCpu = cpu;
 					}
 					paintCpu();
+					if (coresChanged && st.info && Array.isArray(st.info.load) && st.info.load.length >= 3) {
+						paintKv();
+						if (view.tiles.load) view.tiles.load.el.title = loadTooltip(st.info.load);
+					}
 				}
 
 				const now = Date.now();

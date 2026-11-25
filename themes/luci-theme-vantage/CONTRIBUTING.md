@@ -74,7 +74,7 @@ For changes to Makefiles, `root/` files or install scripts, also build the
 packages (commit first; the script builds a clean clone of the commit):
 
 ```sh
-dev/build/sdk-build.sh 25.12.4
+dev/build/sdk-build.sh 25.12.6
 ```
 
 ## Translations
@@ -229,8 +229,8 @@ SDK.
    `overview.js`'s `NEWS_URL` (the "what's new" link;
    `tests/view.test.js` checks it), and commit.
 2. Build that commit locally for both releases:
-   `dev/build/sdk-build.sh 25.12.4` and `dev/build/sdk-build.sh 24.10.8`.
-3. Commit both builds' hashes, `dist/25.12.4/SHA256SUMS` and
+   `dev/build/sdk-build.sh 25.12.6` and `dev/build/sdk-build.sh 24.10.8`.
+3. Commit both builds' hashes, `dist/25.12.6/SHA256SUMS` and
    `dist/24.10.8/SHA256SUMS` in one file, as
    `.release-manifests/v<version>.sha256`, push, then push the tag
    `v<version>` on that commit.
@@ -246,6 +246,17 @@ SDK.
    of the name), then use "Re-run failed jobs", not "Re-run all jobs"
    (that builds again and needs the approval again). Leave the
    `vantage-*` artifacts: the re-run publishes from them.
+
+Between releases, a change to the site's page, its screenshots or the
+video (`dev/build/repo-index.html`, `docs/screenshots/`) is published by
+hand: Actions → CI → Run workflow on `main` with "Publish the site page,
+screenshots and video again" ticked, or
+`gh workflow run ci.yml --ref main -f site=true`. The job "Republish the
+site page" fetches the package feeds as they are live, stops unless they
+are the latest release's and the keys on `main` are the live ones, and
+deploys them unchanged with the page from `main`. Don't start it while a
+release is being published, and after a failure start a new run instead
+of re-running an old one.
 
 ### Version numbers
 

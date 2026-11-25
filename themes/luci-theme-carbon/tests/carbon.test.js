@@ -381,6 +381,15 @@ test('Docker uses the whale icon and its pages get their own icons', () => {
 	assert.notEqual(C.icon('nodes'), C.icon('nonexistent'));
 });
 
+test('FlowCone, HONK and irqbalance reuse existing semantic sidebar icons', () => {
+	const C = load();
+	assert.equal(C.pageIcon('flowcone', 'network'), 'zap');
+	assert.equal(C.pageIcon('honk', 'services'), 'send');
+	assert.equal(C.pageIcon('irqbalance', 'services'), 'cpu');
+	for (const name of ['zap', 'send', 'cpu'])
+		assert.notEqual(C.icon(name), C.icon('nonexistent'));
+});
+
 test('dashboard layout defaults, UCI serialization and attribute round-trip', () => {
 	const C = load();
 	const L = C.dashboardLayout;
@@ -502,4 +511,222 @@ test('dashboard auto-span packing guarantees balanced 12-column rows on desktop 
 	assert.deepEqual(plain(L.detailSpans(['wireless', 'clients', 'interfaces'])), [12, 12, 12]);
 	assert.deepEqual(plain(L.detailSpans(['wireless', 'interfaces'])), [6, 6]);
 	assert.deepEqual(plain(L.detailSpans(['interfaces'])), [12]);
+});
+
+test('inline hero logo stays in sync with logo.svg and uses unique defs IDs per render', () => {
+	const C = load();
+	const first = C.logo();
+	const second = C.logo();
+	const file = fs.readFileSync('htdocs/luci-static/carbon/logo.svg', 'utf8').trim();
+	const ids = (svg) => [...svg.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+	const refs = (svg) => [...svg.matchAll(/\burl\(#([^)]+)\)/g)].map((m) => m[1]);
+	const normalize = (svg) => svg
+		.replace(/^<svg\b[^>]*>/, '<svg>')
+		.replace(/\bcb-(?:logo|h\d+)-/g, 'cb-x-');
+
+	assert.ok(ids(first).length > 0, 'logo defines gradients/clipPaths');
+	for (const ref of refs(first)) assert.ok(ids(first).includes(ref), `unresolved ref ${ref}`);
+	assert.equal(new Set(ids(first)).size, ids(first).length, 'no duplicate IDs within one logo');
+	for (const id of ids(first)) assert.ok(!ids(second).includes(id), `reused ID ${id} across renders`);
+	assert.equal(normalize(first), normalize(file), 'inline hero logo matches logo.svg geometry');
+});
+
+test('loadStatus classifies 1-minute load relative to CPU core count', () => {
+	const C = load();
+	const plain = (x) => JSON.parse(JSON.stringify(x));
+	assert.deepEqual(plain(C.loadStatus(0.0, 4)), { level: 'ok', label: 'Normal' });
+	assert.deepEqual(plain(C.loadStatus(2.79, 4)), { level: 'ok', label: 'Normal' });
+	assert.deepEqual(plain(C.loadStatus(2.8, 4)), { level: 'warn', label: 'Busy' });
+	assert.deepEqual(plain(C.loadStatus(3.99, 4)), { level: 'warn', label: 'Busy' });
+	assert.deepEqual(plain(C.loadStatus(4.0, 4)), { level: 'bad', label: 'High' });
+	assert.deepEqual(plain(C.loadStatus(0.69, 1)), { level: 'ok', label: 'Normal' });
+	assert.deepEqual(plain(C.loadStatus(0.7, 1)), { level: 'warn', label: 'Busy' });
+	assert.deepEqual(plain(C.loadStatus(1.0, 1)), { level: 'bad', label: 'High' });
+	assert.equal(C.loadStatus(0.5, 0), null, 'unknown cores must not guess a single core');
+	assert.equal(C.loadStatus(0.5, null), null);
+	assert.equal(C.loadStatus(-0.1, 4), null);
+	assert.equal(C.loadStatus(NaN, 4), null);
+});
+
+test('wirelessSummary computes per-SSID band, bandwidth, encryption and deduplicated client counts', () => {
+	const C = load();
+	const plain = (x) => JSON.parse(JSON.stringify(x));
+	const wireless = {
+		radio0: {
+			up: true,
+			config: { band: '2g', channel: '6', htmode: 'HE40' },
+			interfaces: [
+				{ ifname: 'phy0-ap0', config: { mode: 'ap', ssid: 'Home', encryption: 'psk2+ccmp' } },
+				{ ifname: 'phy0-ap1', config: { mode: 'ap', ssid: 'Guest', encryption: 'psk-mixed', disabled: true } },
+				{ ifname: 'phy0-sta0', config: { mode: 'sta', ssid: 'Uplink' } }
+			]
+		},
+		radio1: {
+			up: true,
+			config: { band: '5g', channel: '149', htmode: 'HE160' },
+			interfaces: [
+				{ ifname: 'phy1-ap0', config: { mode: 'ap', ssid: 'Home', encryption: 'sae-mixed' } },
+				{ ifname: 'phy1-ap1', config: { mode: 'ap', ssid: '', encryption: 'owe' } }
+			]
+		},
+		radio2: {
+			up: true,
+			config: { channel: '36', htmode: 'VHT80' },
+			interfaces: [
+				{ ifname: 'phy2-ap0', config: { mode: 'ap', ssid: 'Fallback5G', encryption: 'none' } }
+			]
+		}
+	};
+	const stations = [
+		{ ifname: 'phy0-ap0', mac: 'AA:11:22:33:44:55' },
+		{ ifname: 'phy0-ap0', mac: 'aa:11:22:33:44:55' },
+		{ ifname: 'phy0-ap0', mac: '00:00:00:00:00:00' },
+		{ ifname: 'phy1-ap0', mac: 'bb:11:22:33:44:55' },
+		{ ifname: 'phy1-ap0', mac: 'cc:11:22:33:44:55' }
+	];
+	const res = plain(C.wirelessSummary(wireless, stations));
+	assert.equal(res.totalClients, 3);
+	assert.equal(res.rows.length, 5, 'non-AP sta interface excluded; dual-band same SSID stays separate');
+	assert.deepEqual(res.rows[0], {
+		radio: 'radio0', ifname: 'phy0-ap0', ssid: 'Home', hidden: false,
+		band: '2.4 GHz', bandKey: '2g', channel: '6', width: '40 MHz', encryption: 'WPA2',
+		meta: 'CH 6 · 40 MHz · WPA2', sub: '2.4 GHz · CH 6 · 40 MHz · WPA2', on: true, clients: 1
+	});
+	assert.equal(res.rows[1].ssid, 'Guest');
+	assert.equal(res.rows[1].encryption, 'WPA/WPA2');
+	assert.equal(res.rows[1].on, false);
+	assert.equal(res.rows[1].clients, null, 'disabled AP does not report a client count');
+	assert.equal(res.rows[2].ssid, 'Home');
+	assert.equal(res.rows[2].band, '5 GHz');
+	assert.equal(res.rows[2].bandKey, '5g');
+	assert.equal(res.rows[2].width, '160 MHz');
+	assert.equal(res.rows[2].encryption, 'WPA2/WPA3');
+	assert.equal(res.rows[2].clients, 2);
+	assert.equal(res.rows[3].hidden, true);
+	assert.equal(res.rows[3].encryption, 'OWE');
+	assert.equal(res.rows[3].clients, 0, 'active AP with no stations reports 0');
+	assert.equal(res.rows[4].band, '5 GHz', 'numeric channel fallback infers 5 GHz');
+	assert.equal(res.rows[4].meta, 'CH 36 · 80 MHz');
+	assert.equal(res.rows[4].clients, 0);
+
+	// Unavailable stations (null) keeps client counts unknown instead of showing false 0
+	const unknown = plain(C.wirelessSummary(wireless, null));
+	assert.equal(unknown.totalClients, null);
+	assert.ok(unknown.rows.every((r) => r.clients === null));
+
+	// OpenWrt HT40+/HT40-/VHT80+80/NOHT widths, case-insensitive band, and active-AP-only totalClients
+	const edgeW = {
+		radio0: {
+			up: true,
+			config: { band: '2G', channel: '6', htmode: 'HT40+' },
+			interfaces: [
+				{ ifname: 'phy0-ap0', config: { mode: 'ap', ssid: 'Plus40', encryption: 'psk2' } },
+				{ ifname: 'phy0-ap1', config: { mode: 'ap', ssid: 'DisabledAP', encryption: 'psk2', disabled: true } },
+				{ ifname: 'phy0-sta0', config: { mode: 'sta', ssid: 'ClientLink' } }
+			]
+		},
+		radio1: {
+			up: true,
+			config: { band: '5g', channel: '36', htmode: 'VHT80+80' },
+			interfaces: [
+				{ ifname: 'phy1-ap0', config: { mode: 'ap', ssid: 'Dual80', encryption: 'sae' } }
+			]
+		},
+		radio2: {
+			up: true,
+			config: { band: '2g', channel: '11', htmode: 'HT40-' },
+			interfaces: [
+				{ ifname: 'phy2-ap0', config: { mode: 'ap', ssid: 'Minus40', encryption: 'none' } }
+			]
+		},
+		radio3: {
+			up: true,
+			config: { band: '2g', channel: '1', htmode: 'NOHT' },
+			interfaces: [
+				{ ifname: 'phy3-ap0', config: { mode: 'ap', ssid: 'Legacy', encryption: 'none' } }
+			]
+		}
+	};
+	const edgeRes = plain(C.wirelessSummary(edgeW, [
+		{ ifname: 'phy0-ap0', mac: '11:22:33:44:55:01' },
+		{ ifname: 'phy0-ap1', mac: '11:22:33:44:55:02' },
+		{ ifname: 'phy0-sta0', mac: '11:22:33:44:55:03' },
+		{ ifname: 'stale-if0', mac: '11:22:33:44:55:04' }
+	]));
+	assert.equal(edgeRes.rows[0].band, '2.4 GHz');
+	assert.equal(edgeRes.rows[0].width, '40 MHz');
+	assert.equal(edgeRes.rows[2].width, '80+80 MHz');
+	assert.equal(edgeRes.rows[3].width, '40 MHz');
+	assert.equal(edgeRes.rows[4].width, null);
+	assert.equal(edgeRes.totalClients, 1, 'stations on disabled, non-AP or unmatched interfaces do not inflate totalClients');
+	assert.equal(C.wirelessSummary(edgeW, []).totalClients, 0, 'empty station list reports 0 total clients');
+});
+
+test('simpleMenu validates paths, resolves defaults and opkg/package-manager aliases, normalizes and round-trips attributes', () => {
+	const C = load();
+	const M = C.simpleMenu;
+	const plain = (v) => JSON.parse(JSON.stringify(v));
+
+	for (const ok of ['status/overview', 'system/package-manager', 'services/ssr-plus', 'services/v2rayA', 'status/channel_analysis', 'services/luci.app', 'docker'])
+		assert.equal(M.isValidPath(ok), true, ok);
+	for (const bad of ['', null, 'none', 'logout', 'logout/sub', '../etc', 'status/..', '.hidden', 'status/.hidden', 'a/b/c', 'a b', 'a;b', 'a/b..c'])
+		assert.equal(M.isValidPath(bad), false, String(bad));
+
+	// Default resolves installed paths (24.10 opkg without Wi-Fi vs 25.x package-manager with Wi-Fi)
+	const known24 = {
+		'admin/status/overview': { path: 'admin/status/overview', title: 'Overview' },
+		'admin/network/network': { path: 'admin/network/network', title: 'Interfaces' },
+		'admin/system/opkg': { path: 'admin/system/opkg', title: 'Software' },
+		'admin/system/carbon-update': { path: 'admin/system/carbon-update', title: 'Carbon Theme Settings' },
+		'admin/system/admin': { path: 'admin/system/admin', title: 'Administration' },
+		'admin/system/flash': { path: 'admin/system/flash', title: 'Backup / Flash Firmware' },
+		'admin/system/reboot': { path: 'admin/system/reboot', title: 'Reboot' }
+	};
+	const def24 = plain(M.defaultConfig(known24, 'admin'));
+	assert.deepEqual(def24, {
+		common: ['status/overview', 'network/network'],
+		system: ['system/opkg', 'system/carbon-update', 'system/admin', 'system/flash', 'system/reboot']
+	});
+	assert.equal(M.isDefault(def24, known24, 'admin'), true);
+	assert.equal(M.isDefault({ common: ['status/overview'], system: def24.system }, known24, 'admin'), false);
+
+	// Alias resolution: saved system/opkg resolves to system/package-manager after OpenWrt upgrade
+	const known25 = Object.assign({}, known24, { 'admin/system/package-manager': { path: 'admin/system/package-manager', title: 'Software' } });
+	delete known25['admin/system/opkg'];
+	const resolved = M.resolvePath('system/opkg', known25, 'admin');
+	assert.equal(resolved.path, 'admin/system/package-manager');
+	assert.equal(resolved.builtin.icon, 'box');
+	assert.equal(M.resolvePath('services/missing', known25, 'admin'), null);
+
+	// Normalization deduplicates across groups (common wins), strips invalid tokens, enforces 32-item cap, falls back when empty
+	const norm = plain(M.normalize({
+		common: 'status/overview ../bad status/overview services/openclash logout',
+		system: 'services/openclash system/reboot none'
+	}));
+	assert.deepEqual(norm, {
+		common: ['status/overview', 'services/openclash'],
+		system: ['system/reboot']
+	});
+
+	const many = Array.from({ length: 40 }, (_, i) => 'services/p' + i);
+	const capped = M.normalize({ common: many, system: ['system/reboot'] });
+	assert.equal(M.count(capped), 32);
+	assert.equal(capped.system.length, 0);
+
+	// Per-group 1024-byte cap matches backend UCI validation
+	const longPaths = Array.from({ length: 20 }, (_, i) => 'services/' + 'a'.repeat(55) + i);
+	const byteCapped = M.normalize({ common: longPaths, system: [] });
+	assert.ok(M.serialize(byteCapped).common.length <= M.MAX_BYTES);
+	assert.ok(byteCapped.common.length < 20);
+
+	assert.deepEqual(plain(M.normalize({ common: 'none', system: 'none' })), plain(M.defaultConfig()));
+
+	// Serialization & attribute parsing
+	const attr = M.encodeAttr({ common: ['status/overview', 'services/openclash'], system: [] });
+	assert.equal(attr, 'common=status/overview services/openclash;system=none');
+	assert.deepEqual(plain(M.parseAttr(attr)), { common: ['status/overview', 'services/openclash'], system: [] });
+	assert.equal(M.parseAttr(''), null);
+	assert.equal(M.parseAttr('common=none;system=none'), null);
+	assert.equal(M.parseAttr('common=../bad;system=logout'), null);
+	assert.equal(M.parseAttr('bogus=status/overview'), null);
 });

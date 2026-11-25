@@ -71,10 +71,11 @@ async function open(url, { width = 1280, height = 900, appearance = 'light', sto
 	return { page, context, errors };
 }
 
-/* every async source has rendered: leases, Wi‑Fi stations, sensors, languages */
+/* every async source has rendered: leases, Wi‑Fi stations, sensors, CPU cores, languages */
 const dashboardReady = (page) => page.waitForFunction(() =>
 	document.querySelectorAll('.cb-clients .cb-list li').length >= 8 && document.querySelector('.cb-tag-wifi') &&
-	document.querySelectorAll('.cb-kv li').length >= 3 && document.querySelector('.cb-lang .cb-lb'));
+	document.querySelectorAll('.cb-kv li').length >= 2 && document.querySelector('.cb-load-badge') &&
+	document.querySelector('.cb-lang .cb-lb'));
 
 test('side-router discovery works without DHCP and distinguishes neighbours, gateways and lease records', async () => {
 	const mock = fs.readFileSync(path.join(ROOT, 'preview', 'mock.js'), 'utf8');
@@ -270,7 +271,7 @@ test('dashboard shows merged devices, Wi-Fi details, IPv6, sensors and a traffic
 	assert.ok(info.nas, 'static-IP device from ARP named by host hints');
 	assert.equal(info.gateway, false, 'upstream gateway is not a LAN device');
 	assert.equal(info.ipv6, '240e:3a1:4c2:8f0::1');
-	assert.deepEqual(info.sensors, ['Temperature · cpu', 'Temperature · mt7986 phy1']);
+	assert.deepEqual(info.sensors, ['Temperature']);
 	assert.match(info.tile, /^\d+ on Wi-Fi$/);
 
 	/* the traffic picker is a Carbon listbox (same control as the language switch), grouped like <optgroup> */
@@ -516,6 +517,383 @@ test('dashboard customization supports presets, multiple traffic panels, Wi-Fi/t
 		await dark.page.screenshot({ path: path.join(SHOTS, 'custom-drawer-dark.png') });
 		assert.deepEqual(dark.errors, []);
 	} finally { await dark.context.close(); }
+});
+
+test('simple menu customization supports search multi-select, reordering, cancel rollback, persistence, guardrails and mobile drawer handoff', async () => {
+	/* 1. Desktop zh-Hans: live preview with unobstructed sidebar, search/multi-select, reorder, cancel rollback, save & reload, restore default */
+	const { page, context, errors } = await open('/src/preview/index.html?lang=zh-Hans', { width: 1440, height: 1000 });
+	try {
+		await dashboardReady(page);
+		const navLabels = () => page.$$eval('#topmenu .cb-nav-link .cb-nav-label', (els) => els.map((e) => e.textContent));
+		const initial = await navLabels();
+		assert.deepEqual(initial, ['概览', '上网与网络', 'Wi-Fi', '软件包', '管理密码', '备份与升级', '重启']);
+
+		await page.click('.cb-nav-customize');
+		await page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await page.waitForTimeout(300);
+		assert.equal(await page.$eval('.cb-app', (e) => e.hasAttribute('inert')), true, 'shell is inert while menu customizer is open');
+		const geom = await page.evaluate(() => ({
+			sideRight: document.getElementById('cb-sidebar').getBoundingClientRect().right,
+			scrimLeft: document.querySelector('.cb-sheet-scrim-menu').getBoundingClientRect().left
+		}));
+		assert.ok(geom.scrimLeft >= geom.sideRight - 1, 'desktop menu scrim leaves sidebar unobstructed: ' + JSON.stringify(geom));
+		await page.screenshot({ path: path.join(SHOTS, 'simple-menu-edit-desktop.png') });
+
+		/* Open Add-page picker for Common */
+		await page.click('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		await page.waitForSelector('.cb-sheet-search-input:visible');
+		assert.equal(await page.evaluate(() => document.activeElement.classList.contains('cb-sheet-search-input')), true, 'search input is focused on picker open');
+		/* Items already in System are disabled with badge */
+		const rebootItem = page.locator('.cb-picker-item[data-path="system/reboot"]');
+		assert.equal(await rebootItem.isDisabled(), true);
+		assert.match(await rebootItem.textContent(), /已在「系统」中/);
+
+		/* Search & add System Log */
+		await page.fill('.cb-sheet-search-input', '日志');
+		assert.equal(await page.locator('.cb-picker-item').count(), 1);
+		await page.click('.cb-picker-item[data-path="status/syslog"]');
+		assert.match(await page.locator('.cb-picker-item[data-path="status/syslog"]').textContent(), /已添加/);
+		assert.ok((await navLabels()).includes('系统日志'), 'live sidebar updates immediately on add');
+
+		/* Clear search & multi-select two more pages in a row */
+		await page.click('.cb-sheet-search-clear');
+		await page.click('.cb-picker-item[data-path="network/dhcp"]');
+		await page.click('.cb-picker-item[data-path="network/diagnostics"]');
+		await page.screenshot({ path: path.join(SHOTS, 'simple-menu-picker-desktop.png') });
+
+		/* Escape returns from picker to edit view without closing sheet */
+		await page.keyboard.press('Escape');
+		await page.waitForSelector('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		assert.equal(await page.locator('.cb-sheet.cb-sheet-menu').isVisible(), true);
+
+		/* Reorder System Log up & remove Password, verify live sidebar */
+		await page.click('[data-row-key="common:status/syslog"] .cbi-button-up');
+		await page.click('[data-row-key="system:system/admin"] .cbi-button-remove');
+		const edited = await navLabels();
+		assert.equal(edited.indexOf('系统日志') < edited.indexOf('Wi-Fi'), true, 'reordered item moves up in live sidebar');
+		assert.equal(edited.includes('管理密码'), false, 'removed item disappears from live sidebar');
+
+		/* Cancel rolls back completely and restores focus to .cb-nav-customize */
+		await page.click('.cb-sheet-foot .cbi-button:has-text("取消")');
+		await page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		assert.deepEqual(await navLabels(), initial, 'cancel restores previous simple menu');
+		assert.equal(await page.evaluate(() => document.activeElement.classList.contains('cb-nav-customize')), true, 'desktop close restores focus to Customize menu button');
+
+		/* Keyboard focus: Back focuses group Add button; IME Escape stays in Picker; keyboard reorder keeps focus in sheet */
+		await page.click('.cb-nav-customize');
+		await page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await page.click('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		await page.evaluate(() => {
+			document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true }));
+		});
+		assert.equal(await page.locator('.cb-sheet-search-input').isVisible(), true, 'IME Escape does not exit picker');
+		await page.click('.cb-sheet-back');
+		assert.equal(await page.evaluate(() => document.activeElement.classList.contains('cb-sheet-add')), true, 'Back moves focus to group Add button');
+		await page.focus('[data-row-key="common:network/wireless"] .cbi-button-up');
+		await page.keyboard.press('Enter');
+		assert.equal(await page.evaluate(() => !!document.activeElement.closest('.cb-sheet-body')), true, 'keyboard reorder preserves focus inside drawer');
+		await page.click('.cb-sheet-foot .cbi-button:has-text("取消")');
+		await page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+
+		/* Re-open, add System Log + Connected Devices, remove Reboot, Save & reload */
+		await page.click('.cb-nav-customize');
+		await page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await page.click('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		await page.click('.cb-picker-item[data-path="status/syslog"]');
+		await page.click('.cb-picker-item[data-path="network/dhcp"]');
+		await page.click('.cb-sheet-back');
+		await page.click('[data-row-key="system:system/reboot"] .cbi-button-remove');
+		await page.click('.cb-sheet-foot .cbi-button-save');
+		await page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		const savedAttr = await page.evaluate(() => localStorage.getItem('carbon.simpleMenu'));
+		assert.match(savedAttr, /status\/syslog/);
+		assert.match(savedAttr, /network\/dhcp/);
+		assert.doesNotMatch(savedAttr, /system\/reboot/);
+
+		await page.reload();
+		await dashboardReady(page);
+		const persisted = await navLabels();
+		assert.ok(persisted.includes('系统日志') && persisted.includes('已连接设备') && !persisted.includes('重启'), 'custom menu persists after reload: ' + JSON.stringify(persisted));
+
+		/* Restore default & save clears storage */
+		await page.click('.cb-nav-customize');
+		await page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await page.click('.cb-sheet-foot .cbi-button-reset');
+		await page.click('.cb-sheet-foot .cbi-button-save');
+		await page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		assert.equal(await page.evaluate(() => localStorage.getItem('carbon.simpleMenu')), null, 'restoring default clears localStorage');
+		assert.deepEqual(await navLabels(), initial);
+		assert.deepEqual(errors, []);
+	} finally { await context.close(); }
+
+	/* 2. Guardrails & uninstalled saved path (en, dark) */
+	const dark = await open('/src/preview/index.html?lang=en', {
+		width: 1440, height: 1000, appearance: 'dark',
+		storage: { 'carbon.simpleMenu': 'common=status/overview services/openclash;system=none' }
+	});
+	try {
+		await dashboardReady(dark.page);
+		const links = await dark.page.$$eval('#topmenu .cb-nav-link .cb-nav-label', (els) => els.map((e) => e.textContent));
+		assert.deepEqual(links, ['Overview'], 'uninstalled saved plugin is skipped in sidebar');
+		await dark.page.click('.cb-nav-customize');
+		await dark.page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await dark.page.waitForTimeout(300);
+		assert.match(await dark.page.locator('[data-row-key="common:services/openclash"]').textContent(), /Not installed/);
+		await dark.page.screenshot({ path: path.join(SHOTS, 'simple-menu-drawer-dark.png') });
+		await dark.page.click('[data-row-key="common:services/openclash"] .cbi-button-remove');
+		assert.equal(await dark.page.locator('[data-row-key="common:status/overview"] .cbi-button-remove').isDisabled(), true, 'cannot remove the last remaining menu item');
+		assert.deepEqual(dark.errors, []);
+	} finally { await dark.context.close(); }
+
+	/* 3. Mobile 390px: sidebar drawer closes cleanly before bottom sheet opens, zero overflow */
+	const phone = await open('/src/preview/index.html?lang=zh-Hans', { width: 390, height: 844 });
+	try {
+		await dashboardReady(phone.page);
+		await phone.page.click('#cb-burger');
+		await phone.page.waitForSelector('body.cb-nav-open');
+		await phone.page.click('.cb-nav-customize');
+		await phone.page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await phone.page.waitForTimeout(320);
+		assert.equal(await phone.page.evaluate(() => document.body.classList.contains('cb-nav-open')), false, 'mobile nav drawer closes when customizer opens');
+		const sheetBox = await phone.page.locator('.cb-sheet.cb-sheet-menu').boundingBox();
+		const saveBox = await phone.page.locator('.cb-sheet-foot .cbi-button-save').boundingBox();
+		assert.ok(sheetBox.x >= 0 && sheetBox.x + sheetBox.width <= 391, 'phone bottom sheet stays within viewport');
+		assert.ok(saveBox.y + saveBox.height <= 844.5, 'save button stays visible on phone');
+		assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'no horizontal overflow on phone');
+		await phone.page.screenshot({ path: path.join(SHOTS, 'simple-menu-drawer-phone.png') });
+		await phone.page.click('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		await phone.page.click('.cb-picker-item[data-path="status/syslog"]');
+		await phone.page.click('.cb-sheet-foot .cbi-button-save');
+		await phone.page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		await phone.page.click('#cb-burger');
+		await phone.page.waitForSelector('body.cb-nav-open');
+		const phoneLabels = await phone.page.$$eval('#topmenu .cb-nav-link .cb-nav-label', (els) => els.map((e) => e.textContent));
+		assert.ok(phoneLabels.includes('系统日志'), 'saved item appears in mobile drawer');
+		assert.deepEqual(phone.errors, []);
+	} finally { await phone.context.close(); }
+
+	/* 4. Router UCI mode: live Save, Simple<->Pro toggle, setSimpleMenuAttr reset, resetSimpleMenu on default, permission denied, Pro-mode preview & all-uninstalled empty state */
+	const uci = await open('/src/preview/index.html?lang=en', { width: 1440, height: 1000 });
+	try {
+		await dashboardReady(uci.page);
+		await uci.page.evaluate(() => {
+			const baseModel = window.Carbon._navModel;
+			window.__uciCalls = [];
+			window.__uciDeny = false;
+			const routerModel = Object.assign({}, baseModel, {
+				simpleMenuAttr: '',
+				saveSimpleMenu: async (cfg) => {
+					window.__uciCalls.push(['set', window.Carbon.simpleMenu.encodeAttr(cfg)]);
+					if (window.__uciDeny) { const e = new Error('denied'); e.code = 'denied'; throw e; }
+					document.querySelector('.cb-app').dataset.simpleMenu = window.Carbon.simpleMenu.encodeAttr(cfg);
+					return { simple_menu_custom: true };
+				},
+				resetSimpleMenu: async () => {
+					window.__uciCalls.push(['reset']);
+					delete document.querySelector('.cb-app').dataset.simpleMenu;
+					return { simple_menu_custom: false };
+				}
+			});
+			window.Carbon.renderNav(routerModel);
+		});
+		const labels = () => uci.page.$$eval('#topmenu .cb-nav-link .cb-nav-label', (els) => els.map((e) => e.textContent));
+
+		/* Save in UCI mode must keep updated sidebar without reverting to stale model.simpleMenuAttr */
+		await uci.page.click('.cb-nav-customize');
+		await uci.page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await uci.page.click('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		await uci.page.click('.cb-picker-item[data-path="status/syslog"]');
+		await uci.page.click('.cb-sheet-foot .cbi-button-save');
+		await uci.page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		assert.ok((await labels()).includes('System Log'), 'UCI Save keeps updated sidebar immediately');
+
+		/* Switching to Pro and back to Simple preserves in-session saved menu */
+		await uci.page.click('#cb-mode .cb-seg-btn:last-child');
+		await uci.page.waitForSelector('#topmenu .cb-nav-group');
+		await uci.page.click('#cb-mode .cb-seg-btn:first-child');
+		await uci.page.waitForSelector('#topmenu .cb-nav-customize');
+		assert.ok((await labels()).includes('System Log'), 'Simple <-> Pro toggle preserves UCI saved menu');
+
+		/* Pro mode -> openSimpleMenuCustomizer -> temporary Simple preview -> Cancel restores Pro mode */
+		await uci.page.click('#cb-mode .cb-seg-btn:last-child');
+		await uci.page.waitForSelector('#topmenu .cb-nav-group');
+		await uci.page.evaluate(() => window.Carbon.openSimpleMenuCustomizer(null));
+		await uci.page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		assert.ok((await labels()).includes('System Log'), 'opening customizer from Pro mode shows live Simple preview');
+		await uci.page.click('.cb-sheet-foot .cbi-button:has-text("Cancel")');
+		await uci.page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		assert.ok(await uci.page.locator('#topmenu .cb-nav-group').count() > 0, 'closing customizer returns to Pro mode');
+
+		/* Back to Simple: setSimpleMenuAttr("") resets live sidebar immediately (Settings page Restore default hook) */
+		await uci.page.click('#cb-mode .cb-seg-btn:first-child');
+		await uci.page.waitForSelector('#topmenu .cb-nav-customize');
+		await uci.page.evaluate(() => window.Carbon.setSimpleMenuAttr(''));
+		assert.equal((await labels()).includes('System Log'), false, 'setSimpleMenuAttr("") resets live sidebar immediately');
+
+		/* Permission denied keeps drawer open with draft intact */
+		await uci.page.evaluate(() => { window.__uciDeny = true; });
+		await uci.page.click('.cb-nav-customize');
+		await uci.page.waitForSelector('.cb-sheet.cb-sheet-menu.show');
+		await uci.page.click('.cb-sheet-group[data-group="common"] .cb-sheet-add');
+		await uci.page.click('.cb-picker-item[data-path="status/syslog"]');
+		await uci.page.click('.cb-sheet-foot .cbi-button-save');
+		await uci.page.waitForFunction(() => /Log out and log in again/.test(document.querySelector('.cb-sheet-status')?.textContent || ''));
+		assert.equal(await uci.page.locator('.cb-sheet.cb-sheet-menu').isVisible(), true, 'denied error keeps drawer open');
+
+		/* Restore default + Save invokes resetSimpleMenu */
+		await uci.page.evaluate(() => { window.__uciDeny = false; window.__uciCalls = []; });
+		await uci.page.click('.cb-sheet-foot .cbi-button-reset');
+		await uci.page.click('.cb-sheet-foot .cbi-button-save');
+		await uci.page.waitForFunction(() => !document.querySelector('.cb-sheet'));
+		assert.deepEqual(await uci.page.evaluate(() => window.__uciCalls), [['reset']]);
+
+		/* All saved items uninstalled -> renders empty-state notice above Customize menu button */
+		await uci.page.evaluate(() => window.Carbon.setSimpleMenuAttr('common=services/missing_plugin;system=none'));
+		assert.match(await uci.page.textContent('#topmenu .cb-nav-empty'), /No configured pages are currently installed/);
+		assert.equal(await uci.page.locator('#topmenu .cb-nav-customize').isVisible(), true);
+		assert.deepEqual(uci.errors, []);
+	} finally { await uci.context.close(); }
+
+	/* 5. Settings page Simple menu section: Restore default, event sync, and non-Carbon fallback */
+	const settings = await open('/src/tests/fixtures/settings.html', { width: 1200, height: 900 });
+	try {
+		await settings.page.waitForSelector('body[data-ready]');
+		const sec = settings.page.locator('section.cbi-section', { hasText: '简洁菜单' });
+		assert.match(await sec.locator('.cb-update-note').textContent(), /自定义简洁菜单/);
+		await sec.locator('.cbi-button-reset').click();
+		await settings.page.waitForFunction(() => {
+			const s = [...document.querySelectorAll('section.cbi-section')].find((el) => el.textContent.includes('简洁菜单'));
+			return s && /已恢复默认简洁菜单/.test(s.querySelector('.cb-update-note')?.textContent || '');
+		});
+		assert.equal(await sec.locator('.cbi-button-reset').isDisabled(), true);
+		await settings.page.evaluate(() => {
+			document.dispatchEvent(new CustomEvent('carbon:simple-menu-change', { detail: { custom: true } }));
+		});
+		assert.equal(await sec.locator('.cbi-button-reset').isDisabled(), false, 'carbon:simple-menu-change re-enables Restore default');
+		assert.match(await sec.locator('.cb-update-note').textContent(), /当前使用自定义简洁菜单/);
+		assert.deepEqual(settings.errors, []);
+	} finally { await settings.context.close(); }
+});
+
+test('dashboard clarifies load average status and shows multi-SSID wireless bands and client counts', async () => {
+	/* 1. Default overview (en & zh-Hans): load 1-min + badge + tooltip, wireless card counts & bands */
+	for (const lang of ['en', 'zh-Hans']) {
+		const zh = lang === 'zh-Hans';
+		const { page, context, errors } = await open(`/src/preview/index.html?lang=${lang}`, { width: 1440, height: 1000 });
+		try {
+			await dashboardReady(page);
+			const data = await page.evaluate(() => {
+				const loadLi = document.querySelector('.cb-kv li.cb-kv-help');
+				const wirelessRows = [...document.querySelectorAll('.cb-wireless .cb-list > li')].map((li) => ({
+					ssid: li.querySelector('.cb-wifi-ssid')?.textContent || '',
+					band: li.querySelector('.cb-band')?.textContent || '',
+					meta: li.querySelector('.cb-list-sub')?.textContent || '',
+					clients: li.querySelector('.cb-wifi-clients')?.textContent || '',
+					pill: li.querySelector('.cb-pill')?.textContent || ''
+				}));
+				return {
+					loadVal: loadLi?.querySelector('.cb-load-val .cb-mono')?.textContent || '',
+					loadBadge: loadLi?.querySelector('.cb-load-badge')?.textContent || '',
+					loadBadgeOk: loadLi?.querySelector('.cb-load-badge')?.classList.contains('ok') || false,
+					loadTitle: loadLi?.getAttribute('title') || '',
+					loadTileTitle: document.querySelector('.cb-tile-load')?.getAttribute('title') || '',
+					wirelessCount: document.querySelector('.cb-wireless .cb-count')?.textContent || '',
+					wirelessRows
+				};
+			});
+			assert.match(data.loadVal, /^\d+\.\d{2}$/, 'load row displays single 1-min value');
+			assert.equal(data.loadBadge, zh ? '正常' : 'Normal');
+			assert.equal(data.loadBadgeOk, true);
+			assert.match(data.loadTitle, zh ? /1 \/ 5 \/ 15 分钟平均负载：\d+\.\d{2} · \d+\.\d{2} · \d+\.\d{2}（4 核 CPU）/ : /1 \/ 5 \/ 15 min load: \d+\.\d{2} · \d+\.\d{2} · \d+\.\d{2} \(4 cores\)/);
+			assert.equal(data.loadTileTitle, data.loadTitle, 'Load tile tooltip matches Resources load row');
+			assert.equal(data.wirelessCount, '8');
+			assert.deepEqual(data.wirelessRows, [
+				{ ssid: 'Carbon-Home', band: '2.4 GHz', meta: 'CH 6 · 40 MHz · WPA2', clients: zh ? '3 台设备' : '3 devices', pill: zh ? '已开启' : 'On' },
+				{ ssid: 'Carbon-Guest', band: '2.4 GHz', meta: 'CH 6 · 40 MHz · WPA2', clients: '', pill: zh ? '已关闭' : 'Off' },
+				{ ssid: 'Carbon-Home-5G', band: '5 GHz', meta: 'CH 149 · 160 MHz · WPA2/WPA3', clients: zh ? '5 台设备' : '5 devices', pill: zh ? '已开启' : 'On' }
+			]);
+			assert.deepEqual(errors, []);
+		} finally { await context.close(); }
+	}
+
+	/* 2. Standalone Wireless card (no clients card, devices tile, or wifi tile) still fetches per-SSID counts */
+	const solo = await open('/src/preview/index.html?lang=zh-Hans', {
+		width: 1280, height: 900,
+		storage: { 'carbon.dashboard': 'hero=0;sections=details monitor tiles;monitor=none;tiles=none;details=wireless' }
+	});
+	try {
+		await solo.page.waitForFunction(() => document.querySelector('.cb-wireless .cb-count')?.textContent === '8');
+		const counts = await solo.page.$$eval('.cb-wireless .cb-wifi-clients', (els) => els.map((e) => e.textContent));
+		assert.deepEqual(counts, ['3 台设备', '5 台设备']);
+		assert.deepEqual(solo.errors, []);
+	} finally { await solo.context.close(); }
+
+	/* 3. Wi-Fi tile with 4 active SSIDs (including duplicate SSID across bands) truncates cleanly with +N more and fits 390px phone */
+	const mock = fs.readFileSync(path.join(ROOT, 'preview', 'mock.js'), 'utf8');
+	const multi = await browser.newContext({ viewport: { width: 390, height: 844 } });
+	await multi.addInitScript(() => {
+		localStorage.setItem('carbon.dashboard', 'hero=1;sections=tiles details monitor;monitor=resources;tiles=wifi load;details=wireless');
+	});
+	const page = await multi.newPage();
+	const errors = [];
+	page.on('pageerror', (e) => errors.push(e.message));
+	try {
+		await page.route('**/preview/mock.js', (route) => route.fulfill({
+			contentType: 'text/javascript',
+			body: mock + '\n(' + (() => {
+				window.CarbonPreview.provider.wireless = async () => ({
+					radio0: { up: true, config: { band: '2g', channel: '6', htmode: 'HT40+' }, interfaces: [
+						{ ifname: 'phy0-ap0', config: { mode: 'ap', ssid: 'MyHome-Long-Living-Room-Network', encryption: 'psk2' } },
+						{ ifname: 'phy0-ap1', config: { mode: 'ap', ssid: 'MyHome-IoT', encryption: 'psk2' } }
+					] },
+					radio1: { up: true, config: { band: '5g', channel: '149', htmode: 'HE160' }, interfaces: [
+						{ ifname: 'phy1-ap0', config: { mode: 'ap', ssid: 'MyHome', encryption: 'sae-mixed' } }
+					] },
+					radio2: { up: true, config: { band: '6g', channel: '37', htmode: 'EHT320' }, interfaces: [
+						{ ifname: 'phy2-ap0', config: { mode: 'ap', ssid: 'MyHome-6E', encryption: 'sae' } }
+					] }
+				});
+				window.CarbonPreview.provider.stations = async (ifnames) => [
+					{ ifname: 'phy0-ap0', mac: 'aa:00:00:00:00:01', signal: -55 },
+					{ ifname: 'phy0-ap1', mac: 'aa:00:00:00:00:02', signal: -61 },
+					{ ifname: 'phy0-ap1', mac: 'aa:00:00:00:00:03', signal: -63 },
+					{ ifname: 'phy1-ap0', mac: 'aa:00:00:00:00:04', signal: -49 },
+					{ ifname: 'phy1-ap0', mac: 'aa:00:00:00:00:05', signal: -52 },
+					{ ifname: 'phy1-ap0', mac: 'aa:00:00:00:00:06', signal: -54 }
+				].filter((s) => ifnames.includes(s.ifname));
+			}).toString() + ')();'
+		}));
+		await page.goto(base + '/src/preview/index.html?lang=zh-Hans');
+		await page.waitForFunction(() => document.querySelector('.cb-tile-wifi .cb-tile-val')?.textContent === '6');
+		const tile = await page.evaluate(() => ({
+			head: document.querySelector('.cb-tile-wifi .cb-tile-head')?.textContent.trim() || '',
+			val: document.querySelector('.cb-tile-wifi .cb-tile-val')?.textContent || '',
+			rows: [...document.querySelectorAll('.cb-tile-wifi .cb-wifi-row:not(.cb-wifi-row-more)')].map((r) => [
+				r.querySelector('.cb-wifi-row-ssid')?.textContent || '',
+				r.querySelector('.cb-band.cb-wifi-row-band')?.textContent || '',
+				r.querySelector('.cb-band.cb-wifi-row-band')?.classList.contains('cb-band-2g') || false,
+				r.querySelector('.cb-wifi-row-count')?.textContent || ''
+			]),
+			more: document.querySelector('.cb-tile-wifi .cb-wifi-row-more')?.textContent || '',
+			title: document.querySelector('.cb-tile-wifi')?.getAttribute('title') || '',
+			wirelessBands: [...document.querySelectorAll('.cb-wireless .cb-band')].map((b) => b.textContent),
+			wirelessClients: [...document.querySelectorAll('.cb-wireless .cb-wifi-clients')].map((c) => c.textContent),
+			tileOverflow: (document.querySelector('.cb-tile-wifi')?.scrollWidth || 0) > (document.querySelector('.cb-tile-wifi')?.clientWidth || 0) + 1,
+			overflow: document.documentElement.scrollWidth > innerWidth
+		}));
+		assert.equal(tile.head, 'Wi-Fi');
+		assert.equal(tile.val, '6');
+		assert.deepEqual(tile.rows, [['MyHome-Long-Living-Room-Network', '2.4 GHz', true, '1'], ['MyHome-IoT', '2.4 GHz', true, '2']]);
+		assert.equal(tile.more, '还有 2 个');
+		assert.match(tile.title, /MyHome \(5 GHz · CH 149 · 160 MHz · WPA2\/WPA3\) · 3 台设备/);
+		assert.match(tile.title, /MyHome-6E \(6 GHz · CH 37 · 320 MHz · WPA3\) · 0 台设备/);
+		assert.deepEqual(tile.wirelessBands, ['2.4 GHz', '2.4 GHz', '5 GHz', '6 GHz']);
+		assert.deepEqual(tile.wirelessClients, ['1 台设备', '2 台设备', '3 台设备', '0 台设备']);
+		assert.equal(tile.tileOverflow, false, 'long SSID truncates inside 390px half-width Wi-Fi tile without overflow');
+		assert.equal(tile.overflow, false, '4-SSID Wi-Fi tile and wireless card fit 390px phone without overflow');
+		await page.screenshot({ path: path.join(SHOTS, 'multi-ssid-phone.png'), fullPage: true });
+		assert.deepEqual(errors, []);
+	} finally { await multi.close(); }
 });
 
 /* every bundled catalogue loads, translates the shell and fits the sidebar */
@@ -942,6 +1320,196 @@ test('table action cells keep direct buttons compact and centred while preservin
 	}
 });
 
+test('button variants stay consistent across <button> and <input> elements, destructive actions and hover states', async () => {
+	const parseRgb = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+	const isReddish = (s) => { const [r, g, b] = parseRgb(s); return r > g + 40 && r > b + 40; };
+	const isGreenish = (s) => { const [r, g, b] = parseRgb(s); return g > r + 25 && g > b + 10; };
+	const isBluish = (s) => { const [r, g, b] = parseRgb(s); return b > r + 25; };
+
+	for (const mount of ['src', 'min']) {
+		for (const appearance of ['light', 'dark']) {
+			const label = `${mount}/${appearance}`;
+			const { page, context, errors } = await open('/src/preview/form.html', { width: 1280, height: 900, appearance });
+			try {
+				await page.setContent(`<!doctype html><html data-darkmode="${appearance === 'dark'}"><head><meta charset="utf-8">
+					<link rel="icon" href="data:,">
+					<link rel="stylesheet" href="/${mount}/htdocs/luci-static/carbon/carbon.css">
+					<style>.demo-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}</style>
+					</head><body data-page="admin-services-passwall"><main id="maincontent" style="padding:24px"><div id="view">
+					<section class="cbi-section"><div class="cbi-section-node">
+						<div class="demo-row" id="ref-buttons">
+							<button id="btn-base" class="btn cbi-button">取消</button>
+							<button id="btn-neutral" class="cbi-button cbi-button-neutral">重启</button>
+							<button id="btn-toggle" class="cbi-button cbi-button-neutral enable-disable">禁用</button>
+							<button id="btn-iface-down" class="cbi-button cbi-button-neutral down">关闭</button>
+							<button id="btn-add" class="cbi-button cbi-button-add">添加</button>
+							<button id="btn-action" class="cbi-button cbi-button-action">调整</button>
+							<button id="btn-remove" class="cbi-button cbi-button-remove">断开连接</button>
+							<button id="btn-negative" class="cbi-button cbi-button-negative remove">删除</button>
+							<button id="btn-reset" class="cbi-button cbi-button-reset">重置</button>
+							<button id="btn-danger" class="btn danger">危险</button>
+							<button id="btn-error" class="btn error">错误</button>
+							<a id="link-danger" class="btn danger" href="#">危险链接</a>
+							<button id="btn-success" class="btn success">成功</button>
+							<button id="btn-primary" class="cbi-button cbi-button-apply">保存并应用</button>
+							<button id="btn-neg-imp" class="btn cbi-button cbi-button-negative important">断开确认</button>
+							<button id="btn-rem-imp" class="btn cbi-button cbi-button-remove important">强制删除</button>
+							<button id="btn-rst-imp" class="btn cbi-button cbi-button-reset important">恢复出厂</button>
+							<button id="btn-dng-imp" class="btn danger important">危险确认</button>
+						</div>
+						<div class="demo-row pw-toolbar" id="passwall-toolbar">
+							<input id="inp-add" class="btn cbi-button cbi-button-add" type="button" value="添加" />
+							<input id="inp-add-sub" class="btn cbi-button cbi-button-add" type="submit" value="添加节点" />
+							<input id="inp-fieldadd" class="btn cbi-button cbi-button-fieldadd" type="submit" value="添加字段" />
+							<input id="inp-clear" class="btn cbi-button cbi-button-remove" type="button" value="清空所有节点" />
+							<input id="inp-del-sel" class="btn cbi-button cbi-button-remove" type="button" value="删除选择的节点" />
+							<input id="inp-del-sub" class="btn cbi-button cbi-button-remove" type="submit" value="删除" />
+							<input id="inp-group" class="btn cbi-button cbi-button-edit" type="button" value="调整分组" />
+							<input id="inp-apply" class="btn cbi-button cbi-button-apply" type="submit" value="保存并应用" />
+							<input id="inp-reset-btn" class="btn cbi-button cbi-button-reset" type="button" value="重置" />
+							<input id="inp-reset-rst" class="btn cbi-button cbi-button-reset" type="reset" value="复位" />
+							<input id="inp-neutral" class="btn cbi-button cbi-button-neutral" type="button" value="跳过" />
+							<button id="pw-filter-reset" type="button" class="btn cbi-button" data-pw-reset="1">重置筛选</button>
+						</div>
+						<div class="cbi-section-remove right">
+							<input id="sec-remove" type="submit" value="删除" class="btn cbi-button" />
+						</div>
+					</div></section>
+					<table class="table cbi-section-table">
+						<tr class="tr cbi-section-table-row">
+							<td class="td">Singapore-01</td>
+							<td class="td cbi-section-actions"><div>
+								<input id="row-top" class="btn cbi-button cbi-button-edit" type="button" value="置顶" />
+								<input id="row-use" class="btn cbi-button cbi-button-apply" type="button" value="使用" />
+								<input id="row-copy" class="btn cbi-button cbi-button-add" type="button" value="复制" />
+								<input id="row-edit" class="btn cbi-button cbi-button-edit" type="button" value="编辑" />
+								<input id="row-del" class="btn cbi-button cbi-button-remove" type="button" value="删除" />
+							</div></td>
+						</tr>
+					</table>
+					<div class="cbi-page-actions" id="actions-apply">
+						<input id="pa-apply" class="btn cbi-button cbi-button-apply" type="button" value="保存并应用" />
+						<input id="pa-save-after-apply" class="btn cbi-button cbi-button-save" type="submit" value="保存" />
+						<input id="pa-reset" class="btn cbi-button cbi-button-reset" type="button" value="重置" />
+					</div>
+					<div class="cbi-page-actions" id="actions-unchecked" style="position:static;margin-top:12px">
+						<button id="pa-unchecked" class="btn cbi-button cbi-button-negative important">强制应用</button>
+						<button id="pa-save-after-neg" class="cbi-button cbi-button-save">保存</button>
+					</div>
+					</div></main></body></html>`, { waitUntil: 'load' });
+
+				const readStyles = (ids) => page.evaluate((list) => Object.fromEntries(list.map((id) => {
+					const cs = getComputedStyle(document.getElementById(id));
+					return [id, { bg: cs.backgroundColor, fg: cs.color, shadow: cs.boxShadow }];
+				})), ids);
+
+				const ids = [
+					'btn-base', 'btn-neutral', 'btn-toggle', 'btn-iface-down', 'btn-add', 'btn-action',
+					'btn-remove', 'btn-negative', 'btn-reset', 'btn-danger', 'btn-error', 'link-danger',
+					'btn-success', 'btn-primary', 'btn-neg-imp', 'btn-rem-imp', 'btn-rst-imp', 'btn-dng-imp',
+					'inp-add', 'inp-add-sub', 'inp-fieldadd', 'inp-clear', 'inp-del-sel', 'inp-del-sub',
+					'inp-group', 'inp-apply', 'inp-reset-btn', 'inp-reset-rst', 'inp-neutral', 'pw-filter-reset',
+					'sec-remove', 'row-top', 'row-use', 'row-copy', 'row-edit', 'row-del',
+					'pa-apply', 'pa-save-after-apply', 'pa-reset', 'pa-unchecked', 'pa-save-after-neg'
+				];
+				const st = await readStyles(ids);
+
+				/* Tinted red: every destructive/reset button matches regardless of <button> vs <input> */
+				assert.ok(isReddish(st['btn-remove'].fg), `${label}: reference remove button is red (${st['btn-remove'].fg})`);
+				assert.notEqual(st['btn-remove'].bg, st['btn-base'].bg, `${label}: tinted red differs from secondary bg`);
+				for (const id of [
+					'btn-negative', 'btn-reset', 'btn-iface-down', 'btn-danger', 'btn-error', 'link-danger',
+					'inp-clear', 'inp-del-sel', 'inp-del-sub', 'inp-reset-btn', 'inp-reset-rst',
+					'sec-remove', 'row-del', 'pa-reset'
+				]) {
+					assert.deepEqual(st[id], st['btn-remove'], `${label} #${id}: matches tinted red variant`);
+				}
+
+				/* Tinted green: <input> and .btn.success match <button class="cbi-button-add"> */
+				assert.ok(isGreenish(st['btn-add'].fg), `${label}: reference add button is green (${st['btn-add'].fg})`);
+				for (const id of ['btn-success', 'inp-add', 'inp-add-sub', 'inp-fieldadd', 'row-copy']) {
+					assert.deepEqual(st[id], st['btn-add'], `${label} #${id}: matches tinted green variant`);
+				}
+
+				/* Tinted accent: outside .cbi-section-actions, <input class="cbi-button-edit"> matches action tint */
+				assert.ok(isBluish(st['btn-action'].fg), `${label}: reference action button is accent (${st['btn-action'].fg})`);
+				assert.deepEqual(st['inp-group'], st['btn-action'], `${label}: PassWall Reassign Group matches tinted accent`);
+
+				/* Solid primary indigo: applies inside .cbi-section-actions .cbi-button-edit and .cbi-button-apply */
+				assert.ok(isBluish(st['btn-primary'].bg), `${label}: primary button bg is indigo (${st['btn-primary'].bg})`);
+				for (const id of ['inp-apply', 'row-top', 'row-use', 'row-edit', 'pa-apply']) {
+					assert.deepEqual(st[id], st['btn-primary'], `${label} #${id}: matches solid primary indigo`);
+				}
+
+				/* Solid danger red: important destructive variants stay solid red, never solid indigo */
+				assert.ok(isReddish(st['btn-neg-imp'].bg), `${label}: negative.important bg is solid red (${st['btn-neg-imp'].bg})`);
+				assert.notEqual(st['btn-neg-imp'].bg, st['btn-remove'].bg, `${label}: solid danger differs from tinted red`);
+				for (const id of ['btn-rem-imp', 'btn-rst-imp', 'btn-dng-imp', 'pa-unchecked']) {
+					assert.deepEqual(st[id], st['btn-neg-imp'], `${label} #${id}: matches solid red danger`);
+				}
+
+				/* Neutral & secondary buttons stay untouched (no false positives) */
+				assert.deepEqual(st['btn-toggle'], st['btn-neutral'], `${label}: enable-disable stays neutral`);
+				assert.deepEqual(st['inp-neutral'], st['btn-neutral'], `${label}: <input class="cbi-button-neutral"> matches neutral`);
+				assert.notEqual(st['btn-neutral'].bg, st['btn-remove'].bg, `${label}: neutral is not red`);
+				assert.deepEqual(st['pw-filter-reset'], st['btn-base'], `${label}: PassWall filter reset stays secondary chip`);
+				assert.deepEqual(st['pa-save-after-apply'], st['btn-base'], `${label}: Save after Apply stays secondary chip`);
+				assert.deepEqual(st['pa-save-after-neg'], st['btn-base'], `${label}: Save after Apply-unchecked stays secondary chip`);
+				if (mount === 'src')
+					await page.screenshot({ path: path.join(SHOTS, `button-variants-${appearance}.png`), fullPage: true });
+
+				/* Hover states: <input> variants keep their semantic hover color; solid danger never turns indigo */
+				const hoverStyle = async (id) => {
+					await page.hover('#' + id);
+					await page.evaluate((elId) => Promise.all(document.getElementById(elId).getAnimations().map((a) => a.finished)), id);
+					return (await readStyles([id]))[id];
+				};
+
+				const clearHover = await hoverStyle('inp-clear');
+				assert.ok(isReddish(clearHover.fg), `${label}: hovered <input class="cbi-button-remove"> keeps red fg (${clearHover.fg})`);
+				assert.ok(clearHover.shadow.includes(clearHover.fg), `${label}: hovered <input class="cbi-button-remove"> gets red ring (${clearHover.shadow})`);
+
+				const addHover = await hoverStyle('inp-add');
+				assert.ok(isGreenish(addHover.fg), `${label}: hovered <input class="cbi-button-add"> keeps green fg (${addHover.fg})`);
+				assert.ok(addHover.shadow.includes(addHover.fg), `${label}: hovered <input class="cbi-button-add"> gets green ring (${addHover.shadow})`);
+
+				const dangerHover = await hoverStyle('btn-danger');
+				assert.ok(isReddish(dangerHover.fg), `${label}: hovered .btn.danger keeps red fg (${dangerHover.fg})`);
+				assert.ok(dangerHover.shadow.includes(dangerHover.fg), `${label}: hovered .btn.danger gets red ring (${dangerHover.shadow})`);
+
+				const negImpHover = await hoverStyle('btn-neg-imp');
+				assert.ok(isReddish(negImpHover.bg), `${label}: hovered .cbi-button-negative.important stays solid red, never indigo (${negImpHover.bg})`);
+				assert.notEqual(negImpHover.bg, st['btn-neg-imp'].bg, `${label}: hovered solid danger visibly shifts shade`);
+				assert.equal(negImpHover.fg, 'rgb(255, 255, 255)', `${label}: hovered solid danger keeps white text`);
+
+				const secSaveHover = await hoverStyle('pa-save-after-apply');
+				assert.ok(isBluish(secSaveHover.fg), `${label}: hovered secondary Save shows accent hover feedback (${secSaveHover.fg})`);
+
+				/* Clicking <input type="button"> does not trigger text-input focus ring (parity with <button>) */
+				await page.click('#inp-apply');
+				await page.evaluate(() => Promise.all(document.getElementById('inp-apply').getAnimations().map((a) => a.finished)));
+				const clickedApply = (await readStyles(['inp-apply']))['inp-apply'];
+				assert.equal(clickedApply.shadow, st['btn-primary'].shadow, `${label}: mouse-clicking <input type="submit"> keeps button shadow`);
+
+				/* System -> Reboot page: Perform reboot button is solid red at rest and on hover */
+				await page.setContent(`<!doctype html><html data-darkmode="${appearance === 'dark'}"><head><meta charset="utf-8">
+					<link rel="icon" href="data:,">
+					<link rel="stylesheet" href="/${mount}/htdocs/luci-static/carbon/carbon.css">
+					</head><body data-page="admin-system-reboot"><main id="maincontent" style="padding:24px"><div id="view">
+					<h2>重启</h2><p>重启设备的操作系统</p><hr>
+					<button id="reboot-btn" class="cbi-button cbi-button-action important">执行重启</button>
+					</div></main></body></html>`, { waitUntil: 'load' });
+				const rebootRest = (await readStyles(['reboot-btn']))['reboot-btn'];
+				assert.deepEqual(rebootRest, st['btn-neg-imp'], `${label}: System->Reboot button is solid danger red`);
+				const rebootHover = await hoverStyle('reboot-btn');
+				assert.ok(isReddish(rebootHover.bg), `${label}: hovered System->Reboot button stays red (${rebootHover.bg})`);
+
+				assert.deepEqual(errors, []);
+			} finally { await context.close(); }
+		}
+	}
+});
+
 test('lease table avatars stay in the hostname column when hostnames are IP addresses', async () => {
 	for (const mount of ['src', 'min']) {
 		const { page, context, errors } = await open('/src/preview/form.html', { width: 1280, height: 900 });
@@ -1081,7 +1649,7 @@ test('settings page: buttons, links, fields and status text share one centre lin
 			});
 			return { row: row.className, spread: Math.max(...Object.values(lines).map((m) => Math.max(...m) - Math.min(...m))) };
 		}));
-		assert.equal(rows.length, 5, JSON.stringify(rows));
+		assert.equal(rows.length, 6, JSON.stringify(rows));
 		const stray = await page.evaluate(() => [...document.querySelectorAll('#view *')].flatMap((el) => [...el.childNodes])
 			.filter((n) => n.nodeType === 3 && /^(null|undefined)$/.test(n.textContent.trim())).length);
 		assert.equal(stray, 0, 'no "null" / "undefined" text from absent children');

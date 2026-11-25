@@ -1,0 +1,931 @@
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/space-grotesk-400.woff2") format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:500;font-display:swap;src:url("fonts/space-grotesk-500.woff2") format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:600;font-display:swap;src:url("fonts/space-grotesk-600.woff2") format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/space-grotesk-700.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/jetbrains-mono-400.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/jetbrains-mono-700.woff2") format("woff2")}
+
+/* AdGuard Home 管理中心 · 操作台配色（冷灰 + 单色青）
+   仅作用于 iframe 内部，不加载任何 LuCI 主题样式。 */
+
+:root{
+	--agh-bg:#f4f5f7;
+	--agh-surface:#fff;
+	--agh-surface-2:#f7f8fa;
+	--agh-surface-3:#eceef2;
+	--agh-text:#1b1f24;
+	--agh-strong:#11151a;
+	--agh-muted:#5f6773;
+	--agh-muted-2:#3d444d;
+	--agh-border:#e2e5ea;
+	--agh-border-strong:#cbd1d9;
+	--agh-primary:#0f766e;
+	--agh-primary-2:#0d9488;
+	--agh-primary-soft:#e6f4f1;
+	--agh-on-primary:#ffffff;
+	--agh-success:#0f766e;
+	--agh-success-soft:#e6f4f1;
+	--agh-warning:#b54708;
+	--agh-warning-soft:#fdf1e5;
+	--agh-danger:#b42318;
+	--agh-danger-soft:#fdeceb;
+	--agh-ring:rgba(15,118,110,.22);
+	--agh-radius:12px;
+	--agh-radius-sm:9px;
+	--agh-radius-xs:6px;
+	--agh-gap:8px;
+	--agh-font:"Space Grotesk","Noto Sans SC",system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+	--agh-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+	--agh-z-top:20;
+}
+
+html.agh-dark{
+	--agh-bg:#0e1116;
+	--agh-surface:#151a21;
+	--agh-surface-2:#1a2028;
+	--agh-surface-3:#222a34;
+	--agh-text:#e6e9ee;
+	--agh-strong:#f4f6f8;
+	--agh-muted:#98a2b3;
+	--agh-muted-2:#c3cad4;
+	--agh-border:#262d37;
+	--agh-border-strong:#39424f;
+	--agh-primary:#2dd4bf;
+	--agh-primary-2:#5eead4;
+	--agh-primary-soft:#12312e;
+	--agh-on-primary:#06201d;
+	--agh-success:#2dd4bf;
+	--agh-success-soft:#12312e;
+	--agh-warning:#f5b26b;
+	--agh-warning-soft:#332316;
+	--agh-danger:#f97066;
+	--agh-danger-soft:#331b1a;
+	--agh-ring:rgba(45,212,191,.22);
+}
+
+/* color-scheme 挂在面板容器上，不放 html：否则暗色下浏览器会把 iframe 画布涂成不透明黑，
+   居中留白处就会露出两块黑边（浅色模式不会） */
+.agh-app{color-scheme:light}
+html.agh-dark .agh-app{color-scheme:dark}
+
+*,*::before,*::after{box-sizing:border-box}
+
+html,body{margin:0;padding:0;min-height:0;background:transparent}
+
+body{
+	font-family:var(--agh-font);
+	font-size:13.5px;
+	line-height:1.6;
+	color:var(--agh-text);
+	background:transparent;
+	-webkit-font-smoothing:antialiased;
+}
+
+button,input,select,textarea{font:inherit;color:inherit}
+
+h1,h2,h3,h4{margin:0;text-wrap:balance}
+p{text-wrap:pretty}
+
+a{color:var(--agh-primary);text-decoration:none}
+a:hover{text-decoration:underline}
+
+code{
+	font-family:var(--agh-mono);
+	font-size:11.5px;
+	padding:1px 4px;
+	border-radius:4px;
+	background:var(--agh-surface-3);
+	color:var(--agh-muted-2);
+}
+
+[hidden]{display:none !important}
+
+:focus-visible{outline:2px solid var(--agh-primary-2);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){
+	*,*::before,*::after{
+		transition-duration:.001ms !important;
+		animation-duration:.001ms !important;
+		animation-iteration-count:1 !important;
+	}
+}
+
+/* ========== 外壳 ========== */
+.agh-app{
+	width:100%;
+	max-width:1200px;
+	margin:0 auto;
+	background:var(--agh-bg);
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius);
+}
+
+/* ========== 顶栏 ========== */
+.agh-topbar{
+	background:var(--agh-surface);
+	border-bottom:1px solid var(--agh-border);
+	border-radius:var(--agh-radius) var(--agh-radius) 0 0;
+}
+.agh-topbar-in{
+	display:flex;
+	flex-wrap:wrap;
+	align-items:center;
+	gap:0 18px;
+	padding:8px 18px 0;
+}
+.agh-brand{display:flex;align-items:center;gap:10px;flex:0 0 auto;white-space:nowrap;order:1}
+.agh-brand-mark{
+	width:34px;height:34px;
+	border-radius:9px;
+	display:grid;place-items:center;
+	background:var(--agh-primary);
+	color:var(--agh-on-primary);
+}
+.agh-brand-mark svg{width:19px;height:19px}
+.agh-brand-txt{display:flex;align-items:baseline;gap:7px;min-width:0}
+.agh-brand-name{font-size:17px;font-weight:700;color:var(--agh-strong)}
+.agh-brand-sub{font-size:13px;color:var(--agh-muted)}
+
+/* 导航栏单独占一行，位于标题行（品牌 / 状态 / 操作）下方，左对齐 */
+.agh-tabs{
+	order:3;display:flex;align-items:stretch;
+	flex:1 0 100%;min-width:0;height:48px;
+	margin:4px -18px 0;padding:0 18px;
+	border-top:1px solid var(--agh-border);
+}
+.agh-tabs-scroll{
+	display:flex;align-items:stretch;
+	margin:0;
+	overflow-x:auto;
+	scrollbar-width:thin;
+}
+.agh-tab{
+	position:relative;
+	border:0;background:transparent;
+	padding:0 16px;
+	font-size:15px;font-weight:600;
+	color:var(--agh-muted);
+	cursor:pointer;white-space:nowrap;
+}
+.agh-tab:hover{color:var(--agh-text)}
+.agh-tab.is-active{color:var(--agh-strong)}
+.agh-tab.is-active::after{
+	content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;
+	background:var(--agh-primary);
+}
+
+.agh-topbar-actions{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:12px;flex:0 0 auto;order:2;margin-left:auto;min-width:0;max-width:100%}
+
+.agh-version{
+	font-family:var(--agh-mono);font-size:12.5px;color:var(--agh-muted);
+	border:1px solid var(--agh-border);border-radius:var(--agh-radius-xs);
+	padding:3px 9px;white-space:nowrap;cursor:pointer;
+}
+.agh-version:hover{color:var(--agh-primary);border-color:var(--agh-primary-2)}
+.agh-version.is-checking{color:var(--agh-muted);cursor:progress}
+
+.agh-core-badge{
+	display:inline-flex;align-items:center;height:24px;padding:0 9px;
+	border:1px solid var(--agh-border);border-radius:var(--agh-radius-xs);
+	background:var(--agh-surface-2);
+	font-family:var(--agh-mono);font-size:12px;color:var(--agh-muted);
+	white-space:nowrap;
+}
+
+.agh-update-tip{
+	height:26px;padding:0 11px;
+	border:1px solid var(--agh-warning);
+	border-radius:var(--agh-radius-xs);
+	background:var(--agh-warning-soft);color:var(--agh-warning);
+	font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+
+.agh-theme-btn{
+	height:36px;padding:0 14px;
+	border:1px solid var(--agh-border-strong);
+	border-radius:var(--agh-radius-xs);
+	background:var(--agh-surface);
+	color:var(--agh-muted-2);
+	font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.agh-theme-btn:hover{color:var(--agh-primary);border-color:var(--agh-primary-2)}
+
+/* 顶栏里的状态胶囊与面板入口 */
+.agh-pill{
+	display:inline-flex;align-items:center;gap:6px;
+	height:28px;padding:0 11px;
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius-xs);
+	background:var(--agh-surface-2);
+	font-size:13px;font-weight:600;color:var(--agh-muted);
+	white-space:nowrap;
+}
+.agh-pill-ok{background:var(--agh-success-soft);color:var(--agh-success);border-color:var(--agh-success)}
+.agh-pill-warn{background:var(--agh-warning-soft);color:var(--agh-warning);border-color:var(--agh-warning)}
+.agh-pill-bad{background:var(--agh-danger-soft);color:var(--agh-danger);border-color:var(--agh-danger)}
+.agh-pill-muted{background:var(--agh-surface-2);color:var(--agh-muted)}
+
+.agh-badge{
+	display:inline-flex;align-items:center;
+	height:36px;padding:0 14px;
+	border:1px solid var(--agh-border-strong);
+	border-radius:var(--agh-radius-xs);
+	background:var(--agh-surface);
+	font-size:13.5px;font-weight:600;color:var(--agh-text);
+	white-space:nowrap;
+}
+a.agh-badge:hover{border-color:var(--agh-primary-2);color:var(--agh-primary);text-decoration:none}
+.agh-badge-link{cursor:pointer}
+.agh-badge.is-disabled,.agh-btn.is-disabled{
+	opacity:.5;cursor:not-allowed;pointer-events:none;
+}
+
+/* ========== 页面容器 ========== */
+.agh-main{padding:18px 20px 6px}
+.agh-tab-panel{display:none}
+.agh-tab-panel.is-active{display:block}
+
+.agh-cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:0 28px;align-items:start}
+.agh-col{min-width:0}
+.agh-col + .agh-col{border-left:1px solid var(--agh-border);padding-left:28px}
+/* 等宽两栏：两张同类卡片横向并排。
+   两张卡共用同一套行轨道（subgrid），卡头高度不同也不会让下面的字段行错位。 */
+.agh-cols-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto auto;gap:0 28px;align-items:start}
+.agh-cols-2 > .agh-card{
+	display:grid;grid-template-rows:subgrid;grid-row:span 2;
+	min-width:0;border-bottom:0;padding-top:0;padding-bottom:0;
+}
+.agh-cols-2 .agh-form-grid.agh-rows > .agh-field{grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:3px 12px}
+
+.agh-card{padding:14px 0;border-bottom:1px solid var(--agh-border)}
+.agh-card:first-child{padding-top:0}
+.agh-card:last-child{border-bottom:0}
+.agh-col > .agh-card:last-child{border-bottom:0}
+.agh-card[data-subpanel],.agh-card[data-logpanel]{display:none}
+.agh-card[data-subpanel].is-active,.agh-card[data-logpanel].is-active{display:block}
+.agh-progress-card{margin:12px 20px 0;padding:14px 0;border-bottom:0}
+
+.agh-card-head{
+	display:flex;align-items:flex-start;justify-content:space-between;
+	gap:12px;flex-wrap:wrap;margin-bottom:10px;
+}
+.agh-card-head h3{font-size:13.5px;font-weight:700;color:var(--agh-strong)}
+/* 标题与说明同行：说明跟在标题右侧，占满剩余宽度 */
+.agh-card-head-left{min-width:0;flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px}
+.agh-card-head-left h3{flex:0 0 auto}
+.agh-card-head-left .agh-head-note{flex:1 1 320px}
+.agh-head-note{font-weight:400}
+/* 卡片头部的筛选/操作控件并排一行，下拉框不占满宽度 */
+.agh-card-head .agh-inline{flex:0 0 auto}
+.agh-card-head .agh-inline select{width:auto;min-width:130px}
+/* 标题、说明与操作控件压在同一行，说明在自己的宽度内折行 */
+.agh-card-head.agh-head-inline{align-items:center;flex-wrap:nowrap}
+.agh-card-head.agh-head-inline .agh-card-head-left{flex:1 1 auto}
+.agh-subhead{
+	font-size:12.5px;font-weight:700;color:var(--agh-strong);
+	margin:14px 0 8px;
+}
+.agh-subhead-row{
+	display:flex;align-items:center;justify-content:space-between;
+	gap:10px;flex-wrap:wrap;margin:14px 0 8px;
+}
+.agh-subhead-row .agh-subhead{margin:0}
+
+.agh-hint{margin:0;font-size:11.5px;line-height:1.55;color:var(--agh-muted)}
+.agh-hint-warn{color:var(--agh-warning)}
+/* 需要提醒的说明做成浅底提示条，比一整行橙色文字更清楚 */
+.agh-notice-warn{
+	margin:0 0 12px;
+	padding:9px 12px;
+	border:1px solid var(--agh-warning);
+	border-radius:var(--agh-radius-sm);
+	background:var(--agh-warning-soft);
+	color:var(--agh-warning);
+	line-height:1.65;
+}
+.agh-stats-notice{color:var(--agh-muted)}
+.agh-stats-alert{margin-top:8px}
+.agh-mt-8{margin-top:8px}
+.agh-ml-auto{margin-left:auto}
+.agh-inline{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ========== 运行状态（状态带） ========== */
+.agh-card.agh-band{
+	background:var(--agh-surface);
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius);
+	padding:14px 18px;
+	margin-bottom:14px;
+}
+#agh-status-grid{
+	display:grid;
+	grid-template-columns:repeat(2,minmax(0,1fr));
+	column-gap:28px;
+}
+.agh-status-item{
+	display:grid;
+	grid-template-columns:92px minmax(0,1fr);
+	gap:10px;align-items:start;
+	padding:7px 0;
+	border-bottom:1px solid var(--agh-border);
+	font-size:12.5px;
+}
+#agh-status-grid > .agh-status-item:last-child{border-bottom:0}
+/* 状态项按两列成对排列，避免右列出现大块空洞；仅“配置建议”独占整行 */
+.agh-status-wide{grid-column:auto}
+.agh-status-full{grid-column:1 / -1}
+.agh-status-full{grid-template-columns:92px minmax(0,1fr)}
+.agh-status-nowrap .agh-v{white-space:nowrap}
+.agh-k{color:var(--agh-muted)}
+.agh-v{color:var(--agh-strong);min-width:0;overflow-wrap:anywhere}
+.agh-ok{color:var(--agh-success);font-weight:600}
+.agh-bad{color:var(--agh-danger);font-weight:600}
+.agh-warn{color:var(--agh-warning)}
+.agh-path{font-family:var(--agh-mono);font-size:11.5px;color:var(--agh-muted-2);overflow-wrap:anywhere}
+.agh-pass-wrap{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.agh-beta-tag{
+	margin-left:4px;padding:0 5px;
+	border:1px solid var(--agh-warning);border-radius:4px;
+	background:var(--agh-warning-soft);color:var(--agh-warning);
+	font-size:10px;font-weight:600;
+}
+.agh-core-update{cursor:pointer;color:var(--agh-warning);text-decoration:underline}
+
+/* ========== 过滤统计 ========== */
+.agh-metrics{
+	display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+	border:2px solid var(--agh-primary);
+	border-radius:var(--agh-radius-sm);
+	overflow:hidden;
+}
+.agh-metric{padding:11px 13px;border-right:2px solid var(--agh-primary);min-width:0}
+.agh-metric:last-child{border-right:0}
+.agh-metric-num{
+	font-size:22px;font-weight:700;line-height:1.25;
+	color:var(--agh-strong);
+	font-variant-numeric:tabular-nums;
+}
+.agh-metric-label{margin-top:1px;font-size:11px;color:var(--agh-muted)}
+
+/* ========== 初始化步骤 ========== */
+.agh-steps{border-top:1px solid var(--agh-border)}
+.agh-step{
+	display:flex;align-items:flex-start;gap:11px;
+	padding:11px 0;border-bottom:1px solid var(--agh-border);
+}
+.agh-step:last-child{border-bottom:0}
+.agh-step-no{
+	width:20px;height:20px;flex:0 0 20px;
+	border:1px solid var(--agh-border-strong);border-radius:50%;
+	display:grid;place-items:center;
+	font-size:10.5px;color:var(--agh-muted);margin-top:1px;
+}
+.agh-step-body{flex:1;min-width:0}
+.agh-step-title{font-size:12.5px;font-weight:600;color:var(--agh-strong)}
+/* 步骤标题与说明同一行，说明在剩余宽度内折行 */
+.agh-step-title-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;margin-bottom:7px}
+.agh-step-title-row > .agh-step-title{flex:0 0 auto}
+.agh-step-title-row > .agh-hint{flex:1 1 260px}
+
+/* ========== 进度 ========== */
+.agh-progress-wrap{margin-top:12px;padding:11px 13px;border:1px solid var(--agh-border);border-radius:var(--agh-radius-sm);background:var(--agh-surface-2)}
+.agh-progress-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;font-size:12px;font-weight:600;color:var(--agh-strong)}
+.agh-progress-bar{position:relative;height:6px;border-radius:999px;background:var(--agh-surface-3);overflow:hidden}
+.agh-progress-bar i{position:absolute;inset:0 auto 0 0;width:100%;background:var(--agh-primary);border-radius:999px;transition:width .2s}
+.agh-progress-bar.is-indeterminate i{width:35%;animation:agh-slide 1.2s ease-in-out infinite}
+@keyframes agh-slide{
+	0%{transform:translateX(-110%)}
+	100%{transform:translateX(310%)}
+}
+
+/* ========== 日志块 / 空状态 ========== */
+.agh-log{
+	margin:0;padding:9px 11px;
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius-sm);
+	background:var(--agh-surface-2);
+	font-family:var(--agh-mono);
+	font-size:11px;line-height:1.7;
+	color:var(--agh-text);
+	white-space:pre-wrap;word-break:break-word;
+	max-height:220px;overflow:auto;
+}
+.agh-log-tall{max-height:300px}
+.agh-log-sections{display:flex;flex-direction:column;gap:12px}
+.agh-log-section-title{
+	display:flex;align-items:center;gap:7px;
+	margin:0 0 5px;
+	font-size:11px;font-weight:700;color:var(--agh-muted);
+}
+.agh-log-section-title::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--agh-primary)}
+.agh-empty{
+	padding:16px;border:1px dashed var(--agh-border);border-radius:var(--agh-radius-sm);
+	text-align:center;font-size:12px;color:var(--agh-muted);
+}
+
+/* ========== 提示列表 ========== */
+.agh-tips{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.agh-tips li{
+	position:relative;
+	padding-left:14px;
+	font-size:12px;line-height:1.6;color:var(--agh-muted-2);
+}
+.agh-tips li::before{
+	content:"";position:absolute;left:3px;top:8px;
+	width:4px;height:4px;border-radius:50%;background:var(--agh-border-strong);
+}
+.agh-tips li b{color:var(--agh-strong);font-weight:600}
+.agh-guide-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--agh-muted-2)}
+.agh-guide-list b{color:var(--agh-strong)}
+
+/* ========== 按钮 ========== */
+.agh-btn{
+	display:inline-flex;align-items:center;justify-content:center;gap:6px;
+	height:34px;padding:0 13px;
+	border:1px solid var(--agh-border-strong);border-radius:var(--agh-radius-xs);
+	background:var(--agh-surface);
+	color:var(--agh-text);
+	font-size:12.5px;font-weight:600;
+	cursor:pointer;white-space:nowrap;
+	transition:transform .08s;
+}
+.agh-btn:hover{background:var(--agh-surface-2);border-color:var(--agh-primary);text-decoration:none}
+.agh-btn:active{transform:translateY(1px)}
+.agh-btn-primary{background:var(--agh-primary);border-color:var(--agh-primary);color:var(--agh-on-primary)}
+.agh-btn-primary:hover{background:var(--agh-primary);border-color:var(--agh-primary-2);color:var(--agh-on-primary)}
+.agh-btn-secondary{background:var(--agh-surface);border-color:var(--agh-border-strong);color:var(--agh-text)}
+.agh-btn-danger{background:var(--agh-surface);border-color:var(--agh-border-strong);color:var(--agh-danger)}
+.agh-btn-danger:hover{background:var(--agh-danger-soft);border-color:var(--agh-danger)}
+.agh-ghost-btn{
+	display:inline-flex;align-items:center;justify-content:center;
+	height:28px;padding:0 8px;
+	border:1px solid transparent;border-radius:var(--agh-radius-xs);
+	background:transparent;color:var(--agh-muted);
+	font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.agh-ghost-btn:hover{background:var(--agh-surface-2);color:var(--agh-text)}
+.agh-small-btn{height:28px;padding:0 9px;font-size:11.5px;border-radius:var(--agh-radius-xs)}
+.agh-btn.agh-small-btn{height:28px;padding:0 9px;font-size:11.5px}
+.agh-mini-btn{
+	height:22px;padding:0 7px;
+	border:1px solid var(--agh-border);border-radius:4px;
+	background:var(--agh-surface);color:var(--agh-muted);
+	font-size:10.5px;font-weight:600;cursor:pointer;
+}
+.agh-mini-btn:hover{color:var(--agh-primary);border-color:var(--agh-primary-2)}
+.agh-btn:disabled,.agh-ghost-btn:disabled,.agh-mini-btn:disabled,.agh-theme-btn:disabled{
+	opacity:.45;cursor:not-allowed;transform:none;
+}
+.agh-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ========== 表单基础 ========== */
+.agh-form{display:block}
+/* 字段内：标签与说明同一行，控件另起一行 */
+.agh-field{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 8px;min-width:0;align-items:start}
+.agh-field > label{grid-row:1;grid-column:1}
+.agh-field > .agh-label-row{grid-row:1;grid-column:1 / -1}
+.agh-field > .agh-hint{grid-row:1;grid-column:2;align-self:baseline;min-width:0}
+.agh-field > .agh-hint-warn{grid-row:3;grid-column:1 / -1}
+.agh-field > *:not(label):not(.agh-hint):not(.agh-label-row){grid-row:2;grid-column:1 / -1}
+.agh-field > label{font-size:12.5px;font-weight:600;color:var(--agh-strong)}
+.agh-label-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 8px}
+.agh-label-row .agh-hint{flex:1 1 auto;min-width:0}
+.agh-label-row label{font-size:12.5px;font-weight:600;color:var(--agh-strong)}
+
+input[type="text"],input[type="number"],input[type="password"],input[type="search"],select,textarea{
+	width:100%;
+	height:34px;
+	padding:0 10px;
+	border:1px solid var(--agh-border-strong);
+	border-radius:8px;
+	background:var(--agh-surface-2);
+	color:var(--agh-text);
+	font-size:12.5px;
+	outline:none;
+}
+textarea{height:auto;min-height:78px;padding:8px 10px;line-height:1.65;resize:vertical}
+select{appearance:none;cursor:pointer;padding-right:30px;
+	background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%235f6773' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat:no-repeat;background-position:right 10px center;
+}
+input:focus,select:focus,textarea:focus{
+	border-color:var(--agh-primary);
+	box-shadow:0 0 0 3px var(--agh-ring);
+	background:var(--agh-surface);
+}
+input::placeholder,textarea::placeholder{color:var(--agh-muted)}
+input[type="checkbox"]{width:15px;height:15px;accent-color:var(--agh-primary);cursor:pointer}
+input:disabled,select:disabled,textarea:disabled{opacity:.55;cursor:not-allowed}
+
+.agh-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}
+.agh-form-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px}
+.agh-form-grid-tight{gap:10px 16px}
+.agh-form-actions{
+	display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+	margin-top:12px;padding-top:11px;border-top:1px solid var(--agh-border);
+}
+
+/* 行式设置：标签在左列；有说明时说明占标签右侧一行，控件紧接其下，列位固定不错位 */
+.agh-form-grid.agh-rows{display:block}
+.agh-form-grid.agh-rows > .agh-field{
+	display:grid;
+	grid-template-columns:270px minmax(0,1fr);
+	gap:3px 14px;
+	align-items:start;
+	padding:12px 0;
+	border-bottom:1px solid var(--agh-border);
+}
+.agh-form-grid.agh-rows > .agh-field:last-child{border-bottom:0;padding-bottom:0}
+.agh-form-grid.agh-rows > .agh-field > label{grid-column:1;grid-row:1}
+.agh-form-grid.agh-rows > .agh-field > input,
+.agh-form-grid.agh-rows > .agh-field > select,
+.agh-form-grid.agh-rows > .agh-field > textarea,
+.agh-form-grid.agh-rows > .agh-field > .agh-select{grid-column:2;grid-row:1;width:100%;max-width:560px}
+.agh-form-grid.agh-rows > .agh-field > .agh-hint{grid-column:2;grid-row:1;margin:0}
+/* 有说明行的字段：说明在上、控件在下，避免说明与控件抢同一行 */
+.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > input,
+.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > select,
+.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > textarea,
+.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > .agh-select{grid-row:2}
+.agh-form-grid.agh-rows > .agh-field > .agh-hint.agh-hint-warn,
+.agh-form-grid.agh-rows > .agh-field > p{grid-column:2;grid-row:3;margin:0}
+/* 控件与状态值同一行：下拉框定宽，右侧跟「当前生效」之类的值，不再上下分离 */
+.agh-form-grid.agh-rows > .agh-field > .agh-field-row{
+	grid-column:2;grid-row:1;
+	display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;min-width:0;
+}
+.agh-form-grid.agh-rows > .agh-field > .agh-field-row > select,
+.agh-form-grid.agh-rows > .agh-field > .agh-field-row > input{width:260px;max-width:100%;flex:0 0 auto}
+.agh-form-grid.agh-rows > .agh-field > .agh-field-row > .agh-hint{margin:0;min-width:0}
+
+/* 上游来源行：下拉与「当前生效」紧贴标签；选「自定义」后列表在同一行右侧横向并列 */
+.agh-form-grid.agh-rows > .agh-field.agh-upstream-row{grid-template-columns:auto minmax(0,1fr)}
+.agh-form-grid.agh-rows > .agh-field > .agh-field-row.agh-upstream-line{align-items:flex-start}
+.agh-form-grid.agh-rows > .agh-field > .agh-field-row.agh-upstream-line > .agh-hint{padding-top:8px}
+.agh-upstream-custom{display:flex;align-items:flex-start;gap:6px 10px;flex:1 1 340px;min-width:240px}
+.agh-upstream-custom > label{
+	font-size:12.5px;font-weight:600;color:var(--agh-strong);
+	white-space:nowrap;padding-top:8px;
+}
+.agh-upstream-custom-body{flex:1 1 auto;min-width:0}
+.agh-upstream-custom-body > textarea{width:100%;max-width:none;min-height:86px}
+.agh-upstream-custom-body > .agh-hint{margin:4px 0 0}
+
+/* 开关行 */
+.agh-field-switch{
+	display:flex;align-items:center;gap:12px;
+	padding:10px 0;
+}
+.agh-field-switch > div:first-child{flex:1;min-width:0}
+.agh-field-switch + .agh-form-grid{margin-top:4px}
+
+.agh-switch-state{font-size:11.5px;color:var(--agh-muted);white-space:nowrap}
+.agh-switch-state.is-on{color:var(--agh-success);font-weight:600}
+
+.agh-switch{position:relative;width:40px;height:22px;flex:0 0 40px;display:inline-block;cursor:pointer}
+.agh-switch input{position:absolute;opacity:0;width:0;height:0}
+.agh-switch > span{position:absolute;inset:0;border-radius:999px;background:var(--agh-border-strong);transition:background .16s}
+.agh-switch > span::after{
+	content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
+	border-radius:50%;background:#fff;transition:transform .16s;
+}
+html.agh-dark .agh-switch > span::after{background:#dbe2ea}
+.agh-switch input:checked + span{background:var(--agh-primary)}
+.agh-switch input:checked + span::after{transform:translateX(18px)}
+.agh-switch input:focus-visible + span{box-shadow:0 0 0 3px var(--agh-ring)}
+.agh-switch input:disabled + span{opacity:.5;cursor:not-allowed}
+
+.agh-check-label{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--agh-muted-2);cursor:pointer}
+
+.agh-field.is-locked,.agh-form-grid.is-locked{opacity:.5}
+.agh-field.is-locked > label,.agh-form-grid.is-locked label{color:var(--agh-muted)}
+
+/* 自定义下拉（不参与接管的接口） */
+.agh-select{position:relative}
+.agh-select-toggle{
+	display:flex;align-items:center;justify-content:space-between;gap:8px;
+	width:100%;height:34px;padding:0 10px;
+	border:1px solid var(--agh-border-strong);border-radius:8px;
+	background:var(--agh-surface-2);color:var(--agh-text);
+	font-size:12.5px;cursor:pointer;
+}
+.agh-select-toggle:hover{border-color:var(--agh-primary-2)}
+.agh-select-toggle > span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agh-select-arrow{color:var(--agh-muted);font-size:11px;flex:0 0 auto}
+.agh-select-menu{
+	position:absolute;z-index:var(--agh-z-top);top:calc(100% + 4px);left:0;right:0;
+	max-height:220px;overflow:auto;
+	padding:4px;
+	border:1px solid var(--agh-border);border-radius:var(--agh-radius-sm);
+	background:var(--agh-surface);
+}
+.agh-select-menu[hidden]{display:none}
+.agh-select-menu .agh-option{
+	display:flex;align-items:center;gap:8px;
+	padding:6px 8px;border-radius:4px;
+	font-size:12px;color:var(--agh-muted-2);cursor:pointer;
+}
+.agh-select-menu .agh-option:hover{background:var(--agh-surface-2);color:var(--agh-text)}
+
+/* 分段按钮 */
+.agh-seg{display:inline-flex;align-items:center;padding:2px;border:1px solid var(--agh-border);border-radius:var(--agh-radius-xs);background:var(--agh-surface-2)}
+.agh-seg button{
+	height:24px;padding:0 9px;
+	border:0;border-radius:4px;background:transparent;
+	font-size:11.5px;font-weight:600;color:var(--agh-muted);cursor:pointer;white-space:nowrap;
+}
+.agh-seg button:hover{color:var(--agh-text)}
+.agh-seg button.is-active{background:var(--agh-surface);color:var(--agh-strong);border:1px solid var(--agh-border)}
+
+/* ========== 子页签 ========== */
+.agh-subtabs{
+	display:flex;gap:16px;
+	border-bottom:1px solid var(--agh-border);
+	margin-bottom:2px;
+	overflow-x:auto;scrollbar-width:thin;
+}
+.agh-subtab{
+	border:0;border-bottom:2px solid transparent;background:transparent;
+	padding:8px 1px;
+	font-size:12.5px;font-weight:600;color:var(--agh-muted);
+	cursor:pointer;white-space:nowrap;
+}
+.agh-subtab:hover{color:var(--agh-text)}
+.agh-subtab.is-active{color:var(--agh-strong);border-bottom-color:var(--agh-primary)}
+
+/* ========== 过滤开关网格（五个开关并列一排） ========== */
+.agh-form-grid-5{
+	display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius-sm);
+	overflow:hidden;
+}
+.agh-form-grid-5 > .agh-field{
+	display:block;
+	padding:10px 12px;
+	border-right:1px solid var(--agh-border);
+}
+.agh-form-grid-5 > .agh-field:last-child{border-right:0}
+.agh-form-grid-5 .agh-switch-head{gap:8px}
+.agh-form-grid-5 .agh-switch-head > label:first-child{font-size:12px}
+.agh-switch-head{display:flex;align-items:center;gap:10px}
+.agh-switch-head > label:first-child{flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--agh-strong);cursor:pointer}
+
+/* 开关带说明时整行竖排，避免说明被 flex 挤成竖排单字 */
+.agh-field-switch.agh-field-switch-stack{display:block}
+.agh-field-switch-stack > .agh-hint,
+.agh-field-switch-stack > p{margin:6px 0 0}
+
+/* ========== 规则列表 ========== */
+.agh-rule-list{border-top:1px solid var(--agh-border)}
+.agh-rule{
+	display:grid;
+	grid-template-columns:auto minmax(0,1fr) auto auto auto;
+	gap:10px;align-items:center;
+	padding:8px 0;
+	border-bottom:1px solid var(--agh-border);
+	font-size:12.5px;
+}
+.agh-rule:last-child{border-bottom:0}
+.agh-rule-name{
+	font-weight:600;color:var(--agh-strong);
+	min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.agh-rule-tag{
+	margin-left:4px;padding:0 5px;
+	border:1px solid var(--agh-primary-2);border-radius:4px;
+	background:var(--agh-primary-soft);color:var(--agh-primary);
+	font-size:10px;font-weight:600;
+}
+.agh-rule-source{
+	font-size:10.5px;color:var(--agh-muted);
+	border:1px solid var(--agh-border);border-radius:4px;
+	padding:0 5px;white-space:nowrap;
+}
+.agh-rule-meta{font-size:11px;color:var(--agh-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.agh-rule-count{text-align:right;min-width:64px}
+
+/* 上下排列：规则输入框在上，DoH 开关条在下，均占满整行 */
+.agh-rules-label{margin-bottom:8px}
+.agh-rules-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+/* 自定义规则是多行文本，用等宽字体并给足高度，方便逐条核对 */
+.agh-rules-textarea{
+	height:220px;min-height:220px;
+	font-family:var(--agh-mono);font-size:12px;line-height:1.6;
+	padding:8px 10px;
+}
+.agh-rules-aside{
+	background:var(--agh-surface-3);
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius-sm);
+	padding:11px 14px;
+}
+.agh-rules-aside > .agh-hint{margin:8px 0 0;line-height:1.7}
+.agh-memory-trim{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.agh-preset-source{width:auto;min-width:132px;height:28px;font-size:11.5px;padding:0 26px 0 8px}
+
+/* ========== 查询日志表 ========== */
+.agh-query-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+.agh-query-table th{
+	padding:7px 8px;border-bottom:1px solid var(--agh-border-strong);
+	font-size:10.5px;font-weight:700;text-align:left;color:var(--agh-muted);white-space:nowrap;
+}
+.agh-query-table td{
+	padding:6px 8px;border-bottom:1px solid var(--agh-border);
+	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+	vertical-align:top;line-height:1.45;
+}
+/* 域名 / 命中规则可换行显示，长内容不再被省略号截断；
+   客户端固定单行（放不下时省略，悬停看完整名称+IP） */
+.agh-query-table td.agh-query-domain,
+.agh-query-table td.agh-query-rule{
+	white-space:normal;overflow:visible;text-overflow:clip;
+	overflow-wrap:anywhere;
+}
+.agh-query-table tbody tr:hover{background:var(--agh-surface-2)}
+.agh-query-table tbody tr:last-child td{border-bottom:0}
+.agh-query-table .agh-empty{border:0;padding:10px}
+.agh-col-time{width:112px}
+.agh-col-client{width:22%}
+.agh-col-domain{width:18%}
+.agh-col-rule{width:39%}
+.agh-col-elapsed{width:64px}
+.agh-col-status{width:76px}
+.agh-query-date{margin-right:4px}
+.agh-query-time,.agh-query-elapsed{
+	font-family:var(--agh-mono);font-size:11px;color:var(--agh-muted);
+	font-variant-numeric:tabular-nums;
+}
+.agh-query-client,.agh-query-rule{color:var(--agh-muted)}
+.agh-query-domain{color:var(--agh-strong)}
+.agh-log-block{color:var(--agh-danger);font-weight:600}
+.agh-log-ok{color:var(--agh-success);font-weight:600}
+
+.agh-pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-top:10px}
+.agh-pager-info{font-size:11.5px;color:var(--agh-muted)}
+
+/* input[type=search] 的基础规则带属性选择器，优先级高于类名，
+   这里用同权重选择器覆盖，否则会 width:100% 把工具栏挤成三行 */
+input.agh-querylog-search{width:180px;height:28px;font-size:11.5px}
+.agh-querylog-select{width:auto;min-width:98px;height:28px;font-size:11.5px;padding:0 26px 0 8px}
+
+/* ========== YAML 编辑器 ========== */
+.agh-code{
+	width:100%;min-height:680px;
+	padding:11px 12px;
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius-sm);
+	background:var(--agh-surface-2);
+	font-family:var(--agh-mono);
+	font-size:11.5px;line-height:1.65;
+	color:var(--agh-text);
+	resize:vertical;
+}
+
+/* ========== 说明折叠 ========== */
+.agh-details{border-bottom:1px solid var(--agh-border)}
+.agh-details:last-child{border-bottom:0}
+.agh-details summary{
+	display:flex;align-items:center;gap:9px;
+	padding:11px 0;
+	font-size:12.5px;font-weight:600;color:var(--agh-strong);
+	cursor:pointer;list-style:none;
+}
+.agh-details summary::-webkit-details-marker{display:none}
+.agh-details summary::before{content:"+";width:14px;font-family:var(--agh-mono);font-weight:400;color:var(--agh-muted)}
+.agh-details[open] summary::before{content:"−"}
+.agh-details .agh-details-body{padding:0 0 11px 23px;font-size:12px;line-height:1.7;color:var(--agh-muted-2)}
+.agh-details .agh-details-body .agh-tips{margin-top:6px}
+
+/* ========== 页脚 ========== */
+.agh-footer{
+	display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+	padding:12px 20px;
+	border-top:1px solid var(--agh-border);
+	font-size:11.5px;color:var(--agh-muted);
+}
+.agh-footer-title{display:inline-flex;align-items:center;gap:12px;color:var(--agh-muted-2);font-weight:600}
+.agh-footer-summary{flex:1 1 100%;font-size:11.5px;line-height:1.6;color:var(--agh-muted)}
+.agh-footer-links{display:inline-flex;align-items:center;gap:12px}
+.agh-footer-link a{color:var(--agh-muted);font-weight:400}
+.agh-footer-link a:hover{color:var(--agh-primary)}
+
+/* ========== 弹窗 ========== */
+.agh-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center}
+.agh-modal[hidden]{display:none}
+.agh-modal-mask{position:absolute;inset:0;background:rgba(9,12,16,.5)}
+.agh-modal-body{
+	position:relative;
+	width:min(560px,calc(100vw - 32px));
+	max-height:calc(100vh - 24px);
+	overflow:auto;
+	padding:18px 20px;
+	border:1px solid var(--agh-border);
+	border-radius:var(--agh-radius);
+	background:var(--agh-surface);
+	color:var(--agh-text);
+}
+.agh-modal-body h3{font-size:15px;color:var(--agh-strong);margin-bottom:6px}
+.agh-confirm-body{width:min(440px,calc(100vw - 32px))}
+.agh-confirm-text{font-size:12.5px;line-height:1.7;color:var(--agh-muted-2);margin:8px 0 0}
+.agh-modal-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0;font-size:12.5px}
+.agh-modal-row > span{min-width:72px;color:var(--agh-muted)}
+.agh-modal-row label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.agh-modal-row input[type="text"]{width:140px;height:30px}
+.agh-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.agh-update-notes{margin:10px 0;padding:9px 11px;border:1px solid var(--agh-border);border-radius:var(--agh-radius-sm);background:var(--agh-surface-2)}
+.agh-update-notes-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.agh-update-notes-title{font-size:12px;font-weight:700;color:var(--agh-strong)}
+.agh-update-notes-link{font-size:11.5px}
+.agh-update-notes pre{
+	margin:0;max-height:180px;overflow:auto;
+	font-family:var(--agh-mono);font-size:11px;line-height:1.6;
+	color:var(--agh-muted-2);white-space:pre-wrap;word-break:break-word;
+}
+
+/* ========== 提示条 ========== */
+.agh-toast{
+	position:fixed;top:18px;right:18px;z-index:40;
+	display:none;
+	max-width:min(420px,calc(100vw - 36px));
+	padding:10px 13px;
+	border:1px solid var(--agh-border-strong);
+	border-left:3px solid var(--agh-primary);
+	border-radius:var(--agh-radius-sm);
+	background:var(--agh-surface);
+	font-size:12.5px;font-weight:600;color:var(--agh-text);
+}
+.agh-toast.is-visible{display:block}
+.agh-toast.is-ok{border-left-color:var(--agh-success)}
+.agh-toast.is-warn{border-left-color:var(--agh-warning)}
+.agh-toast.is-bad{border-left-color:var(--agh-danger)}
+
+/* ========== 响应式 ========== */
+@media (max-width:900px){
+	.agh-cols{grid-template-columns:1fr;gap:0}
+	.agh-cols-2{grid-template-columns:1fr;gap:0}
+	.agh-col + .agh-col{border-left:0;padding-left:0;border-top:1px solid var(--agh-border);margin-top:2px}
+	.agh-form-grid.agh-rows > .agh-field{grid-template-columns:1fr;gap:4px}
+	.agh-form-grid.agh-rows > .agh-field > label{grid-column:1;grid-row:1}
+	.agh-form-grid.agh-rows > .agh-field > .agh-hint{grid-column:1;grid-row:2}
+	.agh-form-grid.agh-rows > .agh-field > input,
+	.agh-form-grid.agh-rows > .agh-field > select,
+	.agh-form-grid.agh-rows > .agh-field > textarea,
+	.agh-form-grid.agh-rows > .agh-field > .agh-select{grid-column:1;grid-row:2;max-width:none}
+	.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > input,
+	.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > select,
+	.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > textarea,
+	.agh-form-grid.agh-rows > .agh-field:has(> .agh-hint:not(.agh-hint-warn)) > .agh-select{grid-row:3}
+	.agh-form-grid.agh-rows > .agh-field > .agh-hint.agh-hint-warn,
+	.agh-form-grid.agh-rows > .agh-field > p{grid-column:1;grid-row:4}
+	.agh-form-grid.agh-rows > .agh-field.agh-upstream-row{grid-template-columns:minmax(0,1fr)}
+	.agh-form-grid.agh-rows > .agh-field > .agh-field-row.agh-upstream-line{grid-column:1;grid-row:2}
+	.agh-form-grid.agh-rows > .agh-field > .agh-field-row.agh-upstream-line > .agh-hint{padding-top:0}
+	.agh-upstream-custom{flex-basis:100%;min-width:0}
+	.agh-upstream-custom > label{padding-top:0;white-space:normal}
+	.agh-rules-layout{grid-template-columns:1fr}
+	.agh-card-head.agh-head-inline{flex-wrap:wrap}
+	.agh-form-grid-5{grid-template-columns:1fr 1fr}
+	.agh-form-grid-5 > .agh-field{border-bottom:1px solid var(--agh-border)}
+	.agh-form-grid-5 > .agh-field:nth-child(even){border-right:0}
+	.agh-form-grid-5 > .agh-field:nth-last-child(2),
+	.agh-form-grid-5 > .agh-field:last-child{border-bottom:0}
+	.agh-form-grid-5 > .agh-field:last-child:nth-child(odd){grid-column:1 / -1;border-right:0}
+	.agh-topbar-in{padding:8px 14px 0;gap:0 14px}
+	.agh-tabs{height:44px;margin:4px -14px 0;padding:0 8px}
+	.agh-brand-txt .agh-brand-sub{display:none}
+}
+
+@media (max-width:680px){
+	.agh-main{padding:14px 14px 4px}
+	.agh-brand-name{font-size:16px}
+	.agh-topbar-actions{gap:10px}
+	.agh-theme-btn,.agh-badge{height:34px;padding:0 12px}
+	.agh-pill{height:24px;padding:0 9px;font-size:12px}
+	#agh-status-grid{grid-template-columns:1fr;column-gap:0}
+	.agh-status-wide,.agh-status-full{grid-column:auto}
+	.agh-metrics{grid-template-columns:1fr}
+	.agh-metric{border-right:0;border-bottom:2px solid var(--agh-primary)}
+	.agh-metric:last-child{border-bottom:0}
+	.agh-form-grid,.agh-form-grid-3{grid-template-columns:1fr}
+	.agh-form-grid-5{grid-template-columns:1fr}
+	.agh-form-grid-5 > .agh-field{border-right:0;border-bottom:1px solid var(--agh-border)}
+	.agh-form-grid-5 > .agh-field:nth-last-child(2){border-bottom:1px solid var(--agh-border)}
+	.agh-form-grid-5 > .agh-field:last-child{border-bottom:0}
+	.agh-form-grid-5 > .agh-field:last-child:nth-child(odd){grid-column:auto}
+	.agh-query-table .agh-col-rule,
+	.agh-query-table .agh-col-elapsed,
+	.agh-query-table th:nth-child(4),
+	.agh-query-table th:nth-child(5),
+	.agh-query-table td:nth-child(4),
+	.agh-query-table td:nth-child(5){display:none}
+	.agh-col-time{width:74px}
+	.agh-col-client{width:110px}
+	/* 手机上时间只留时分秒，省出宽度给客户端与域名 */
+	.agh-query-date{display:none}
+	.agh-rule{grid-template-columns:auto minmax(0,1fr) auto}
+	.agh-rule-source{display:none}
+	.agh-rule-meta.agh-rule-count{display:none}
+	.agh-footer{padding:12px 14px}
+	.agh-subhead-row{gap:8px}
+}
