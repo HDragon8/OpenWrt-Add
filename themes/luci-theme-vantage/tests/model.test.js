@@ -882,6 +882,43 @@ test('groupSsids: same name and security across radios is one network', () => {
 	assert.equal(g[0].clients, 3);
 });
 
+/* 'psk2+tkip+ccmp': WPA2 that still takes TKIP clients */
+test('Wi-Fi security: a cipher list that lets TKIP in is weak whatever the protocol, and not grouped with the same network without it', () => {
+	const wifi = load('vantage.wifi');
+	const rate = enc => { const s = wifi.security(enc); return [ s.short, s.tone, s.long ]; };
+	for (const enc of [ 'psk2+tkip', 'psk2+tkip+ccmp', 'psk2+tkip+aes', 'psk2+ccmp+tkip', 'PSK2+TKIP+CCMP' ])
+		assert.deepEqual(rate(enc), [ 'WPA2', 'weak', 'WPA2-Personal (TKIP allowed)' ], enc);
+	assert.deepEqual(rate('wpa2+tkip+ccmp'), [ 'WPA2-Ent', 'weak', 'WPA2-Enterprise (TKIP allowed)' ]);
+	assert.deepEqual(rate('sae-mixed+tkip+ccmp'), [ 'WPA2/3', 'weak', 'WPA2/WPA3-Personal (TKIP allowed)' ]);
+	/* the other ciphers choose nothing weaker */
+	for (const enc of [ 'psk2', 'psk2+ccmp', 'psk2+aes', 'psk2+gcmp', 'psk2+ccmp256' ])
+		assert.deepEqual(rate(enc), [ 'WPA2', 'ok', 'WPA2-Personal' ], enc);
+	/* a protocol weak on its own reads as before, and an open one has no cipher */
+	assert.deepEqual(rate('psk-mixed+tkip+ccmp'), [ 'WPA/WPA2', 'weak', 'WPA/WPA2-Personal (TKIP allowed)' ]);
+	assert.deepEqual(rate('wpa-mixed+tkip'), [ 'WPA/WPA2-Ent', 'weak', 'WPA/WPA2-Enterprise' ]);
+	assert.deepEqual(rate('psk+tkip'), [ 'WPA', 'weak', 'WPA-Personal (legacy)' ]);
+	assert.deepEqual([ wifi.security('none+tkip').tone, wifi.security('+ccmp').short, wifi.security('tkip').tone ], [ 'open', 'Open', 'ok' ], 'only a cipher after a protocol');
+	/* the older spelling, a slash before the ciphers: netifd reads them off the string's end either way */
+	assert.deepEqual(rate('wpa2/tkip+aes'), [ 'WPA2-Ent', 'weak', 'WPA2-Enterprise (TKIP allowed)' ]);
+	assert.deepEqual(rate('psk2/tkip'), [ 'WPA2', 'weak', 'WPA2-Personal (TKIP allowed)' ]);
+	assert.deepEqual(rate('psk2/aes+tkip'), [ 'WPA2', 'weak', 'WPA2-Personal (TKIP allowed)' ]);
+	assert.deepEqual(rate('psk-mixed/tkip'), [ 'WPA/WPA2', 'weak', 'WPA/WPA2-Personal (TKIP allowed)' ]);
+	assert.deepEqual([ rate('psk2/ccmp'), rate('psk2/aes') ], [ [ 'WPA2', 'ok', 'WPA2-Personal' ], [ 'WPA2', 'ok', 'WPA2-Personal' ] ]);
+	/* TKIP named, but not where netifd reads the ciphers: CCMP-256 alone */
+	assert.deepEqual(rate('psk2+tkip+ccmp256'), [ 'WPA2', 'ok', 'WPA2-Personal' ]);
+	assert.deepEqual(rate('psk9+tkip'), [ 'PSK9', 'weak', 'psk9 (TKIP allowed)' ], 'a protocol this does not know');
+
+	/* one SSID, three configurations: through the model and into the tile's groups */
+	const ifc = (ifname, encryption) => ({ ifname, section: ifname, config: { mode: 'ap', ssid: 'Home', encryption } });
+	const radio = (band, i) => ({ up: true, config: { band }, interfaces: [ i ] });
+	const m = model.build({ wifi: { radio0: radio('2g', ifc('wl0', 'psk2+tkip+ccmp')), radio1: radio('5g', ifc('wl1', 'psk2+ccmp')), radio2: radio('6g', ifc('wl2', 'psk2/tkip')) } });
+	assert.deepEqual(m.ssids.map(x => [ x.ifname, x.security.short, x.security.tone ]), [ [ 'wl0', 'WPA2', 'weak' ], [ 'wl1', 'WPA2', 'ok' ], [ 'wl2', 'WPA2', 'weak' ] ]);
+	assert.deepEqual(model.groupSsids(m.ssids).map(g => [ g.ssid, g.security.tone, g.ids, g.bands ]),
+		[ [ 'Home', 'weak', [ 'wl0', 'wl2' ], [ '2g', '6g' ] ], [ 'Home', 'ok', [ 'wl1' ], [ '5g' ] ] ], 'the TKIP ones together, never under the stronger rating');
+	const ent = model.build({ wifi: { radio0: radio('5g', ifc('wl0', 'wpa2/tkip+aes')) } }).ssids[0].security;
+	assert.deepEqual([ ent.short, ent.tone ], [ 'WPA2-Ent', 'weak' ], 'and the slash form through the model');
+});
+
 test('sampleClock: same device sample is skipped, drift uses device spacing', () => {
 	const a = model.sampleClock(null, 10000, 500);
 	assert.deepEqual(a, { at: 10000, local: 500 });
@@ -1430,18 +1467,28 @@ test('paired access points: the wire is the port or another VLAN of its device; 
 	assert.deepEqual(m.wiredHosts.filter(h => h.mac === HALL_MAC)[0].own, { id: AP1, name: 'ap-hall', macs: [ '02:00:5E:10:00:03' ] });
 	assert.ok(m.wiredHosts.every(h => h.mac === HALL_MAC || !h.own) && before.wiredHosts.every(h => !h.own));
 	/* A second access point on the same wire. Its own MAC is no one else's to claim; nor is an address that it reports
-	   too, as its own, its station or its wired host: a contested claim takes nothing */
+	   too, as its own or its station: a contested claim takes nothing */
 	const DEN_MAC = '02:00:5e:10:00:09', den = (rep) => ap(AP2, 'ap-den', report(Object.assign({ mac: DEN_MAC, wired: [], stations: [] }, rep)));
-	const both = (hallMacs, denRep) => model.build(router({ aps: [ ap(AP1, 'ap-hall', report({ wired: [], stations: [], macs: hallMacs })), den(denRep) ] }, {
+	const two = (hallRep, denRep, fdb) => model.build(router({ aps: [ ap(AP1, 'ap-hall', report(Object.assign({ wired: [], stations: [] }, hallRep))), den(denRep) ] }, {
 		devs: Object.assign({}, router(null).devs, { 'br-iot': { devtype: 'bridge', 'bridge-members': [ 'eth0.3' ] }, 'br-lan': { devtype: 'bridge', 'bridge-members': [ 'eth0.1', 'lan2', 'phy0-ap0' ] },
 			eth0: { devtype: 'ethernet', carrier: true }, 'eth0.1': vlan, 'eth0.3': vlan }),
 		fdb: [ { mac: HALL_MAC, port: 'eth0.1', bridge: 'br-lan', seen: 1 }, { mac: DEN_MAC, port: 'eth0.1', bridge: 'br-lan', seen: 1 },
-			{ mac: IOT_BR, port: 'eth0.3', bridge: 'br-iot', seen: 1 }, { mac: OTHER, port: 'eth0.3', bridge: 'br-iot', seen: 1 } ]
-	})).wiredHosts.map(h => h.mac);
+			{ mac: IOT_BR, port: 'eth0.3', bridge: 'br-iot', seen: 1 }, { mac: OTHER, port: 'eth0.3', bridge: 'br-iot', seen: 1 } ].concat(fdb || [])
+	}));
+	const both = (hallMacs, denRep) => two({ macs: hallMacs }, denRep).wiredHosts.map(h => h.mac);
 	assert.deepEqual(both([ IOT_BR, OTHER ], {}), [ HALL_MAC, DEN_MAC ], 'the control: uncontested, both are its own');
 	assert.deepEqual(both([ DEN_MAC, IOT_BR ], {}), [ HALL_MAC, DEN_MAC, OTHER ], 'another access point\'s MAC stays (and what it did not claim)');
 	assert.deepEqual(both([ IOT_BR, OTHER ], { macs: [ OTHER ] }), [ HALL_MAC, DEN_MAC, OTHER ], 'two call it their own: it stays');
-	assert.deepEqual(both([ IOT_BR, OTHER ], { wired: [ { mac: OTHER, port: 'lan2', speed: 100, rx: null, tx: null } ] }), [ HALL_MAC, DEN_MAC, OTHER ], 'the other\'s wired host stays');
+	/* #167 as 1.2.1 left it: each access point hears the other's bridge on the wire and lists it among its wired hosts,
+	   which contested both claims, so both bridges stayed, each "behind" the other one. A wired host's claim contests none */
+	assert.deepEqual(both([ IOT_BR, OTHER ], { wired: [ { mac: OTHER, port: 'lan2', speed: 100, rx: null, tx: null } ] }), [ HALL_MAC, DEN_MAC ], 'the other\'s wired host is its own all the same');
+	const DEN_BR = '02:00:5e:10:00:0a', seenOn = (mac) => [ { mac, port: 'eth0.3', speed: 1000, rx: null, tx: null } ];
+	const cross = two({ macs: [ HALL_MAC, IOT_BR ], wired: seenOn(DEN_BR).concat(seenOn(OTHER)) }, { macs: [ DEN_MAC, DEN_BR ], wired: seenOn(IOT_BR) },
+		[ { mac: DEN_BR, port: 'eth0.3', bridge: 'br-iot', seen: 1 } ]);
+	assert.deepEqual(cross.wiredHosts.map(h => [ h.mac, h.own ? h.own.macs : null, h.behind ? h.behind.name : null ]),
+		[ [ HALL_MAC, [ '02:00:5E:10:00:03' ], null ], [ DEN_MAC, [ '02:00:5E:10:00:0A' ], null ], [ OTHER, null, 'ap-hall' ] ],
+		'each bridge is on its own access point\'s entry; a host one of them lists keeps its note');
+	assert.ok(cross.offline.every(c => c.mac !== IOT_BR && c.mac !== DEN_BR));
 	assert.deepEqual(both([ IOT_BR, OTHER ], { stations: [ { mac: IOT_BR, ifname: 'phy1-ap0', signal: -60 } ] }), [ HALL_MAC, DEN_MAC ], 'the other\'s station is that station, as before');
 	/* Pre-release review of 1.2.1. A name given to one of those addresses while it was listed as a device: it is there,
 	   on the access point's entry, and not among the named devices that are not connected */
@@ -1914,6 +1961,21 @@ test('build: an access point not reporting (waiting, offline, error) keeps its b
 		assert.deepEqual([ a.state, a.nodes, a.clients, a.wired ], [ extra.state, [], 0, 0 ]);
 		assert.ok(!m.clients.concat(m.wiredHosts).some(c => c.ap || c.behind), extra.state);
 	}
+});
+
+/* #167: the far end of a mesh interface is another node of the mesh. It is listed with the stations, as a peer, and
+   is no client of the radio; its interface still says how many it has */
+test('build: a mesh interface\'s stations are peers, no clients', () => {
+	const m = model.build({ wifi: { radio0: { up: true, config: { band: '5g' }, interfaces: [
+		{ ifname: 'phy0-mesh0', config: { mesh_id: 'bh', mode: 'mesh', network: [ 'lan' ] } }, { ifname: 'phy0-ap0', config: { ssid: 'Home', mode: 'ap', network: [ 'lan' ] } } ] } },
+		assoc: { 'phy0-mesh0': [ { mac: '00:00:5E:00:53:41', signal: -60 }, { mac: '00:00:5E:00:53:43', signal: -61 } ], 'phy0-ap0': [ { mac: '00:00:5E:00:53:42', signal: -50 } ] } });
+	assert.deepEqual(m.clients.map(c => [ c.ifname, c.peer ]).sort(), [ [ 'phy0-ap0', false ], [ 'phy0-mesh0', true ], [ 'phy0-mesh0', true ] ]);
+	assert.deepEqual([ m.radios[0].clients, m.ssids.map(s => [ s.mode, s.clients ]) ], [ 1, [ [ 'mesh', 2 ], [ 'ap', 1 ] ] ]);
+	/* an older peer slows the radio as an older client does: in the radio's count of older devices, as on its row */
+	const old = model.build({ wifi: { radio0: { up: true, config: { band: '5g', htmode: 'HE80' }, interfaces: [ { ifname: 'phy0-mesh0', config: { mesh_id: 'bh', mode: 'mesh' } } ] } },
+		iwinfo: { 'phy0-mesh0': { htmode: 'HE80' } },
+		assoc: { 'phy0-mesh0': [ { mac: '00:00:5E:00:53:41', signal: -60, rx: { rate: 13000, mhz: 20, ht: true, mcs: 8 }, tx: { rate: 13000, mhz: 20, ht: true, mcs: 8 } } ] } });
+	assert.deepEqual([ old.clients[0].peer, old.clients[0].legacyOnRadio, old.radios[0].clients, old.radios[0].legacy ], [ true, true, 0, 1 ]);
 });
 
 test('build: a gateway heard only over this device\'s own client, mesh or WDS link makes it the uplink; over an access point interface it does not', () => {

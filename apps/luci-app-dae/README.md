@@ -1,3 +1,5 @@
+已经合并进https://github.com/QiuSimons/luci-app-daeuniverse
+
 <h1 align="center">luci-app-dae</h1>
 <p align="center">
   <img width="100" src="https://github.com/sbwml/luci-app-dae/assets/16485166/fbab0891-865e-4bd2-a5fc-c6bae05efeaa" />
